@@ -46,3 +46,13 @@ class GuestMemberRepository:
     def count_seated_at_table(self, table_id: int) -> int:
         """Հաշվում է, թե տվյալ սեղանի շուրջ արդեն քանի աթոռ է զբաղված"""
         return self.db.query(GuestMember).filter(GuestMember.table_id == table_id).count()
+
+    def get_all_by_wedding(self, wedding_id: int) -> List[GuestMember]:
+        """Վերադարձնում է տվյալ հարսանիքի բոլոր հյուր-անդամներին (աթոռներին)"""
+        from app.models.guest import Guest
+        return (
+            self.db.query(GuestMember)
+            .join(Guest)
+            .filter(Guest.wedding_id == wedding_id)
+            .all()
+        )

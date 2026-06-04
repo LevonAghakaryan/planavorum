@@ -33,3 +33,7 @@ class GuestMemberService:
     def get_unseated_members(self, wedding_id: int):
         """Վերադարձնում է միայն այն հյուրերին, ովքեր դեռ սեղան չունեն (Չնստեցվածներ)"""
         return self.member_repo.get_unseated_by_wedding(wedding_id)
+
+    def get_all_members_by_wedding(self, wedding_id: int):
+        """Բերում է հարսանիքի բոլոր անդամներին սերվիսի միջոցով"""
+        return self.member_repo.get_all_by_wedding(wedding_id)

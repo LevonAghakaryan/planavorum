@@ -31,3 +31,11 @@ def get_unseated_members(
 ):
     """Վերադարձնում է միայն այն անդամներին, ովքեր դեռ սեղան չունեն"""
     return service.get_unseated_members(wedding_id)
+
+@router.get("/wedding/{wedding_id}", response_model=List[GuestMemberResponse])
+def get_wedding_guest_members(
+    wedding_id: int,
+    service: GuestMemberService = Depends(get_guest_member_service)
+):
+    """Վերադարձնում է տվյալ հարսանիքի բոլոր հյուր-անդամներին"""
+    return service.get_all_members_by_wedding(wedding_id)
