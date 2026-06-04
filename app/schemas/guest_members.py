@@ -6,12 +6,13 @@ from typing import Optional
 class GuestMemberBase(BaseModel):
     first_name: Optional[str] = None
     table_id: Optional[int] = None
+    seat_index: Optional[int] = None  # ✅ Նոր
 
 
-# Անդամի տվյալները թարմացնելու համար (օրինակ՝ անունը փոխել կամ սեղանին նստեցնել)
 class GuestMemberUpdate(BaseModel):
     first_name: Optional[str] = None
     table_id: Optional[int] = None
+    seat_index: Optional[int] = None  # ✅ Նոր
 
 
 class GuestMemberResponse(GuestMemberBase):

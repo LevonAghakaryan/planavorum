@@ -8,10 +8,10 @@ class GuestMember(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     guest_id = Column(Integer, ForeignKey("guests.id", ondelete="CASCADE"), nullable=False)
-    table_id = Column(Integer, ForeignKey("tables.id", ondelete="SET NULL"), nullable=True)  # NULL = դեռ նստեցված չէ
-    first_name = Column(String(255), nullable=True)  # Կարող է լինել NULL, եթե դեռ անունը չեն գրել
+    table_id = Column(Integer, ForeignKey("tables.id", ondelete="SET NULL"), nullable=True)
+    seat_index = Column(Integer, nullable=True)  # ✅ Նոր — կոնկրետ ատոռի համարը (0-based)
+    first_name = Column(String(255), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
-    # Relationships
     guest = relationship("Guest", back_populates="members")
     table = relationship("Table", back_populates="members")

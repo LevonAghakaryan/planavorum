@@ -25,26 +25,32 @@
         .movable-table { position: absolute; cursor: move; user-select: none; }
         .movable-table.dragging { z-index: 100; }
         .chair {
-            position: absolute;
-            width: 26px; height: 26px;
-            border-radius: 50%;
-            background: white;
-            border: 1.5px dashed #c8bfb2;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 9px; color: #8c7b66;
-            transform: translate(-50%, -50%);
-            cursor: pointer;
-            transition: all 0.15s;
-            z-index: 15;
-            font-weight: 500;
-            /* ✅ FIX: chairs don't block dragover events on the table */
-            pointer-events: auto;
-        }
+    position: absolute;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: white;
+    border: 1.5px dashed #c8bfb2;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: #8c7b66;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    transition: all 0.15s;
+    z-index: 15;
+    font-weight: 500;
+    /* ✅ Ապահովում ենք, որ աթոռը ՄԻՇՏ ընդունի Drag & Drop իրադարձությունները */
+    pointer-events: auto !important;
+}
         .chair:hover { border-color: #c9a96e; background: rgba(201,169,110,0.12); }
-        .chair.occupied { background: #1a1612; border: 1.5px solid #1a1612; color: #e8d5b0; font-size: 8px; font-weight: 700; }
+        .chair.occupied {
+    background: #1a1612;
+    border: 1.5px solid #1a1612;
+    color: #ffffff !important; /* ✅ Սարքեցինք մաքուր սպիտակ, որ հյուրի տառերը հստակ երևան */
+    font-size: 8px;
+    font-weight: 700;
+}
         .chair.occupied:hover { background: #3d3228; }
         /* ✅ FIX: while dragging a guest, chairs should not intercept dragover */
-        body.is-dragging-guest .chair { pointer-events: none; }
+
         .table-actions { position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s; white-space: nowrap; z-index: 20; }
         .movable-table:hover .table-actions { opacity: 1; }
         .movable-table.drag-over .table-inner { border-color: #c9a96e !important; box-shadow: 0 0 0 3px rgba(201,169,110,0.25); }
@@ -331,6 +337,7 @@ let selectedGuestIds = [];
 let pendingSeatGuest = null;
 let pendingSeatCount = 1;
 let pendingSeatTableId = null;
+let pendingSeatIndex = null;
 const tablePositions = {};
 
 let pendingNewCategory = null;
@@ -518,26 +525,116 @@ function buildTableElement(table, allMembers, index) {
     tDiv.appendChild(actions);
 
     // Chairs
-    const seatedHere = allMembers.filter(m => m.table_id === table.id);
+const seatedHere = allMembers.filter(m => m.table_id === table.id);
+
+    // 📌 Առանձնացնում ենք այն հյուրերին, ովքեր դեռ կոնկրետ ամրագրված աթոռ չունեն
+    const autoMembers = seatedHere.filter(m => m.seat_index == null);
+
     for (let i = 0; i < table.capacity; i++) {
         const chair = document.createElement('div');
         chair.className = 'chair';
-        const member = seatedHere[i] || null;
-        if (member) {
-            chair.classList.add('occupied');
-            chair.innerText = member.first_name ? member.first_name.substring(0, 3) : '👤';
-            chair.title = member.first_name || 'Անանուն';
-            chair.onclick = (e) => { e.stopPropagation(); manageSeatedMember(member); };
-        } else {
-            chair.innerText = i + 1;
-            chair.title = 'Ազատ — սեղմեք';
-            chair.onclick = (e) => { e.stopPropagation(); openGuestPicker(table.id); };
+
+        // 📌 Նախ ստուգում ենք՝ կա՞ հյուր, ում հատկացված է հենց այս (i) աթոռը
+        let member = seatedHere.find(m => m.seat_index === i);
+
+        // 📌 Եթե այս աթոռը հատուկ ամրագրված չէ ոչ մեկի համար, և ունենք սպասող «ավտոմատ» հյուրեր
+        if (!member && autoMembers.length > 0) {
+            member = autoMembers.shift(); // Վերցնում ենք հերթի առաջինին և հանում ցուցակից
         }
-        const pos = getChairPosition(table.category, i, table.capacity, dim);
-        chair.style.left = pos.x + 'px';
-        chair.style.top  = pos.y + 'px';
-        body.appendChild(chair);
+
+        if (member) {
+        chair.classList.add('occupied');
+        chair.innerText = member.first_name ? member.first_name.substring(0, 3) : '👤';
+        chair.title = member.first_name || 'Անանուն';
+        chair.onclick = (e) => { e.stopPropagation(); manageSeatedMember(member); };
+    } else {
+        chair.innerText = i + 1;
+        chair.title = 'Ազատ — drag կամ սեղմեք';
+        chair.onclick = (e) => { e.stopPropagation(); openGuestPickerForSeat(table.id, i); }; // ✅ seat_index փոխանցում
     }
+
+    // ✅ Chair-ը դառնում է drop target
+    chair.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!chair.classList.contains('occupied')) {
+            chair.style.borderColor = '#c9a96e';
+            chair.style.background = 'rgba(201,169,110,0.2)';
+        }
+    });
+    chair.addEventListener('dragleave', () => {
+        if (!chair.classList.contains('occupied')) {
+            chair.style.borderColor = '';
+            chair.style.background = '';
+        }
+    });
+    chair.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        chair.style.borderColor = '';
+        chair.style.background = '';
+        if (chair.classList.contains('occupied')) return; // Զբաղված ատոռ — անտեսել
+        const memberId = e.dataTransfer.getData('text/plain');
+        if (memberId) await seatMemberOnChair(parseInt(memberId), table.id, i); // ✅ seat_index = i
+    });
+
+    const pos = getChairPosition(table.category, i, table.capacity, dim);
+    chair.style.left = pos.x + 'px';
+    chair.style.top  = pos.y + 'px';
+    body.appendChild(chair);
+}
+// ✅ Կոնկրետ ատոռ-ի վրա drop
+async function seatMemberOnChair(memberId, tableId, seatIndex) {
+    const res = await fetch(
+        `/api/v1/guest-members/${memberId}/seat?table_id=${tableId}&seat_index=${seatIndex}`,
+        { method: 'PUT' }
+    );
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || 'Ազատ տեղ չկա կամ սխալ կատարվեց');
+    } else {
+        loadTables(); loadUnseated(); loadGuests();
+    }
+}
+
+// ✅ Կոնկրետ ատոռ-ի վրա click → guest picker, հետո նստեցնում seat_index-ով
+function openGuestPickerForSeat(tableId, seatIndex) {
+    pendingSeatTableId = tableId;
+    pendingSeatIndex = seatIndex; // ✅ Global variable պահում ենք
+    const list = document.getElementById('guestPickerList');
+    list.innerHTML = '';
+
+    if (globalUnseatedMembers.length === 0) {
+        list.innerHTML = '<p class="text-center text-[#8c7b66] text-sm italic py-6">Չնստեցված հյուրեր չկան 🎉</p>';
+        openModal('guestPickerModal');
+        return;
+    }
+
+    const unseatedIds = new Set(globalUnseatedMembers.map(m => m.id.toString()));
+
+    globalAllGuests.forEach(guest => {
+        const guestUnseated = guest.members.filter(m => unseatedIds.has(m.id.toString()));
+        if (guestUnseated.length === 0) return;
+
+        const groupHeader = document.createElement('div');
+        groupHeader.className = "text-[11px] font-bold text-[#8c7b66] uppercase tracking-wider mt-3 mb-1 px-1";
+        groupHeader.innerText = guest.display_name;
+        list.appendChild(groupHeader);
+
+        guestUnseated.forEach(m => {
+            const btn = document.createElement('button');
+            btn.className = 'w-full text-left px-3 py-2 rounded-lg border border-[#e8ddd0] bg-white text-xs font-medium text-[#1a1612] flex justify-between items-center hover:border-[#c9a96e] hover:bg-[#c9a96e]/5 transition-all mb-1';
+            btn.innerHTML = `<span>👤 ${m.first_name || 'Անանուն հյուր'}</span><span class="text-[#c9a96e] font-bold text-sm">+</span>`;
+            btn.addEventListener('click', async () => {
+                await seatMemberOnChair(m.id, tableId, seatIndex); // ✅ seat_index-ով
+                closeModal('guestPickerModal');
+            });
+            list.appendChild(btn);
+        });
+    });
+
+    openModal('guestPickerModal');
+}
 
     // ✅ FIX 1: Table drag — zoom-aware using zoomWrapper offset
     tDiv.addEventListener('mousedown', (e) => {
@@ -659,11 +756,14 @@ async function openTableSheet(tableId) {
     summary.innerHTML = `<span>${catLabel[table.category]} — ${table.capacity} տեղ</span><span>${seatedHere.length} / ${table.capacity} զբաղ.</span>`;
     body.appendChild(summary);
 
-    seatedHere.forEach((m, idx) => {
+seatedHere.forEach((m) => {
+        // 📌 Օգտագործում ենք m.seat_index-ը (եթե զրոյից է սկսվում, ավելացնում ենք 1, որ ստանանք 1-ից սկսվող համար)
+        const seatNumber = (m.seat_index != null) ? (m.seat_index + 1) : '-';
+
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;margin-bottom:6px;padding:6px 8px;background:rgba(0,0,0,0.02);border-radius:6px;';
         row.innerHTML = `
-            <div style="font-weight:bold;color:#c9a96e;width:20px;">${idx + 1}</div>
+            <div style="font-weight:bold;color:#c9a96e;width:24px;font-size:11px;">#${seatNumber}</div>
             <div style="flex:1;font-size:12px;font-weight:500;">👤 ${m.first_name || 'Անանուն հյուր'}</div>
             <div style="display:flex;gap:4px;">
                 <button style="background:none;border:none;cursor:pointer;padding:2px 6px;" onclick="sheetRename(${m.id}, '${(m.first_name||'').replace(/'/g,"\\'")}')">✏️</button>

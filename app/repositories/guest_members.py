@@ -25,11 +25,12 @@ class GuestMemberRepository:
             .all()
         )
 
-    def update_seating(self, member_id: int, table_id: Optional[int]) -> GuestMember | None:
-        """Նստեցնում է անդամին սեղանի մոտ կամ հանում է սեղանից (table_id=None)"""
+    def update_seating(self, member_id: int, table_id: Optional[int],
+                       seat_index: Optional[int] = None) -> GuestMember | None:
         member = self.db.query(GuestMember).filter(GuestMember.id == member_id).first()
         if member:
             member.table_id = table_id
+            member.seat_index = seat_index  # ✅ Պահում ենք ատոռի index-ը
             self.db.commit()
             self.db.refresh(member)
         return member
@@ -55,4 +56,11 @@ class GuestMemberRepository:
             .join(Guest)
             .filter(Guest.wedding_id == wedding_id)
             .all()
+        )
+    def get_by_table_and_seat(self, table_id: int, seat_index: int) -> GuestMember | None:
+        """Ստուգում է՝ կոնկրետ ատոռն (seat_index) արդեն զբաղված է թե ոչ"""
+        return (
+            self.db.query(GuestMember)
+            .filter(GuestMember.table_id == table_id, GuestMember.seat_index == seat_index)
+            .first()
         )

@@ -10,10 +10,10 @@ router = APIRouter(prefix="/api/v1/guest-members", tags=["Guest Members"])
 def seat_member(
     member_id: int,
     table_id: Optional[int] = None,
+    seat_index: Optional[int] = None,  # ✅ Նոր query param
     service: GuestMemberService = Depends(get_guest_member_service)
 ):
-    """Նստեցնում է անդամին սեղանի մոտ։ Եթե table_id չի ուղարկվում, հանում է սեղանից։"""
-    return service.seat_member(member_id, table_id)
+    return service.seat_member(member_id, table_id, seat_index)
 
 @router.put("/{member_id}/name", response_model=GuestMemberResponse)
 def update_member_name(
