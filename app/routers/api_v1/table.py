@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 from app.schemas.table import TableCreate, TableResponse
 from app.services.table import TableService
-from app.dependencies import get_table_service  # <-- Օգտագործում ենք նոր դիպենդենսին
+from app.dependencies import get_table_service
 
 router = APIRouter(prefix="/api/v1/tables", tags=["Tables"])
 
@@ -27,6 +27,14 @@ def get_available_seats(
 ):
     seats = service.get_table_available_seats(table_id)
     return {"table_id": table_id, "available_seats": seats}
+
+@router.put("/{table_id}/capacity", response_model=TableResponse)
+def update_table_capacity(
+    table_id: int,
+    capacity: int,
+    service: TableService = Depends(get_table_service)
+):
+    return service.update_capacity(table_id, capacity)
 
 @router.delete("/{table_id}")
 def delete_table(

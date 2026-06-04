@@ -26,6 +26,14 @@ class TableRepository:
     def get_by_id(self, table_id: int) -> Table | None:
         return self.db.query(Table).filter(Table.id == table_id).first()
 
+    def update_capacity(self, table_id: int, capacity: int) -> Table | None:
+        db_table = self.get_by_id(table_id)
+        if db_table:
+            db_table.capacity = capacity
+            self.db.commit()
+            self.db.refresh(db_table)
+        return db_table
+
     def delete(self, table_id: int) -> bool:
         db_table = self.get_by_id(table_id)
         if db_table:
