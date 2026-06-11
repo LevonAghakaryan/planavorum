@@ -27,32 +27,29 @@
         .movable-table { position: absolute; cursor: move; user-select: none; }
         .movable-table.dragging { z-index: 100; }
         .chair {
-    position: absolute;
-    width: 26px; height: 26px;
-    border-radius: 50%;
-    background: white;
-    border: 1.5px dashed #c8bfb2;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 9px; color: #8c7b66;
-    transform: translate(-50%, -50%);
-    cursor: pointer;
-    transition: all 0.15s;
-    z-index: 15;
-    font-weight: 500;
-    /* ✅ Ապահովում ենք, որ աթոռը ՄԻՇՏ ընդունի Drag & Drop իրադարձությունները */
-    pointer-events: auto !important;
-}
+            position: absolute;
+            width: 26px; height: 26px;
+            border-radius: 50%;
+            background: white;
+            border: 1.5px dashed #c8bfb2;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 9px; color: #8c7b66;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            transition: all 0.15s;
+            z-index: 15;
+            font-weight: 500;
+            pointer-events: auto !important;
+        }
         .chair:hover { border-color: #c9a96e; background: rgba(201,169,110,0.12); }
         .chair.occupied {
-    background: #1a1612;
-    border: 1.5px solid #1a1612;
-    color: #ffffff !important; /* ✅ Սարքեցինք մաքուր սպիտակ, որ հյուրի տառերը հստակ երևան */
-    font-size: 8px;
-    font-weight: 700;
-}
+            background: #1a1612;
+            border: 1.5px solid #1a1612;
+            color: #ffffff !important;
+            font-size: 8px;
+            font-weight: 700;
+        }
         .chair.occupied:hover { background: #3d3228; }
-        /* ✅ FIX: while dragging a guest, chairs should not intercept dragover */
-
         .table-actions { position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s; white-space: nowrap; z-index: 20; }
         .movable-table:hover .table-actions { opacity: 1; }
         .movable-table.drag-over .table-inner { border-color: #c9a96e !important; box-shadow: 0 0 0 3px rgba(201,169,110,0.25); }
@@ -140,8 +137,8 @@
                 </button>
             </div>
             <button onclick="exportToPDF()" class="flex items-center gap-2 bg-[#7a9e7e] hover:bg-[#688a6c] text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm transition-all cursor-pointer">
-    🖨️ Տպել Ցուցակը (PDF)
-</button>
+                🖨️ Տպել Ցուցակը (PDF)
+            </button>
         </div>
 
         <!-- Zoom Controls -->
@@ -332,7 +329,20 @@
 </div>
 
 <script>
-const weddingId = {{ wedding_id }};
+const weddingId    = {{ wedding_id }};
+const weddingToken = "{{ wedding_token }}";
+
+// ── Secure fetch wrapper ──────────────────────────────────────────────────────
+// Ամեն API request-ին ավտոմատ ավելացնում է X-Wedding-Token header։
+// Ստորև ոչ մի fetch() կոչ չի փոխվել — միայն apiFetch() է կոչվում։
+async function apiFetch(url, options = {}) {
+    options.headers = {
+        ...(options.headers || {}),
+        "X-Wedding-Token": weddingToken,
+    };
+    return fetch(url, options);
+}
+
 let zoomScale = 1.0;
 let isPanning = false;
 let panStart = { x: 0, y: 0 };
@@ -360,7 +370,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTables();
     loadUnseated();
 
-    // Pan & Wheel Zoom setup
     const container = document.getElementById('hallContainer');
     if (container) {
         container.addEventListener('mousedown', (e) => {
@@ -386,7 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── WEDDING ──
 async function loadWeddingDetails() {
-    const res = await fetch(`/api/v1/weddings/${weddingId}`);
+    const res = await apiFetch(`/api/v1/weddings/${weddingId}`);
     if (res.ok) {
         const d = await res.json();
         document.getElementById('weddingHeaderTitle').innerText = `${d.title} — Սրահ`;
@@ -394,19 +403,17 @@ async function loadWeddingDetails() {
     }
 }
 
-// ── ZOOM & PAN RENDER ──
+// ── ZOOM & PAN ──
 function updateCanvasTransform() {
     const wrapper = document.getElementById('zoomWrapper');
     if (wrapper) {
         wrapper.style.transform = `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`;
     }
 }
-
 function zoomHall(f) {
     zoomScale = Math.min(2.5, Math.max(0.3, zoomScale * f));
     updateCanvasTransform();
 }
-
 function resetZoom() {
     zoomScale = 1.0;
     panOffset = { x: 0, y: 0 };
@@ -461,7 +468,7 @@ function changeNewCapacity(delta) {
 async function confirmAddTable() {
     const num = document.getElementById('newTableNumber').value.trim();
     if (!num) { document.getElementById('newTableNumber').focus(); return; }
-    const res = await fetch('/api/v1/tables/', {
+    const res = await apiFetch(`/api/v1/tables/?wedding_id=${weddingId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wedding_id: weddingId, table_number: num, category: pendingNewCategory, capacity: pendingNewCapacity })
@@ -471,12 +478,12 @@ async function confirmAddTable() {
 
 // ── TABLES RENDER ──
 async function loadTables() {
-    const res = await fetch(`/api/v1/tables/wedding/${weddingId}`);
+    const res = await apiFetch(`/api/v1/tables/wedding/${weddingId}`);
     const wrapper = document.getElementById('zoomWrapper');
     if (!res.ok) return;
     const tables = await res.json();
 
-    const guestsRes = await fetch(`/api/v1/guests/wedding/${weddingId}`);
+    const guestsRes = await apiFetch(`/api/v1/guests/wedding/${weddingId}`);
     let allMembers = [];
     if (guestsRes.ok) {
         const guests = await guestsRes.json();
@@ -525,9 +532,7 @@ function buildTableElement(table, allMembers, index) {
     tDiv.style.width  = dim.w + 'px';
     tDiv.style.height = dim.h + 'px';
 
-    if (tableRotations[table.id] === undefined) {
-        tableRotations[table.id] = 0;
-    }
+    if (tableRotations[table.id] === undefined) tableRotations[table.id] = 0;
     tDiv.style.transform = `rotate(${tableRotations[table.id]}deg)`;
 
     const body = document.createElement('div');
@@ -571,7 +576,7 @@ function buildTableElement(table, allMembers, index) {
     tDiv.appendChild(body);
     tDiv.appendChild(actions);
 
-    const seatedHere = allMembers.filter(m => m.table_id === table.id);
+    const seatedHere  = allMembers.filter(m => m.table_id === table.id);
     const autoMembers = seatedHere.filter(m => m.seat_index == null);
 
     for (let i = 0; i < table.capacity; i++) {
@@ -579,9 +584,7 @@ function buildTableElement(table, allMembers, index) {
         chair.className = 'chair';
 
         let member = seatedHere.find(m => m.seat_index === i);
-        if (!member && autoMembers.length > 0) {
-            member = autoMembers.shift();
-        }
+        if (!member && autoMembers.length > 0) member = autoMembers.shift();
 
         if (member) {
             chair.classList.add('occupied');
@@ -595,8 +598,7 @@ function buildTableElement(table, allMembers, index) {
         }
 
         chair.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+            e.preventDefault(); e.stopPropagation();
             if (!chair.classList.contains('occupied')) {
                 chair.style.borderColor = '#c9a96e';
                 chair.style.background = 'rgba(201,169,110,0.2)';
@@ -609,10 +611,8 @@ function buildTableElement(table, allMembers, index) {
             }
         });
         chair.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            chair.style.borderColor = '';
-            chair.style.background = '';
+            e.preventDefault(); e.stopPropagation();
+            chair.style.borderColor = ''; chair.style.background = '';
             if (chair.classList.contains('occupied')) return;
             const memberId = e.dataTransfer.getData('text/plain');
             if (memberId) await seatMemberOnChair(parseInt(memberId), table.id, i);
@@ -622,7 +622,6 @@ function buildTableElement(table, allMembers, index) {
         chair.style.left = pos.x + 'px';
         chair.style.top  = pos.y + 'px';
         chair.style.transform = `translate(-50%, -50%) rotate(${-tableRotations[table.id]}deg)`;
-
         body.appendChild(chair);
     }
 
@@ -636,19 +635,10 @@ function buildTableElement(table, allMembers, index) {
         dragOffset.y = (e.clientY - wrapRect.top)  / zoomScale - parseFloat(tDiv.style.top  || 0);
     });
 
-    tDiv.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        tDiv.classList.add('drag-over');
-    });
-    tDiv.addEventListener('dragleave', (e) => {
-        if (!tDiv.contains(e.relatedTarget)) {
-            tDiv.classList.remove('drag-over');
-        }
-    });
+    tDiv.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); tDiv.classList.add('drag-over'); });
+    tDiv.addEventListener('dragleave', (e) => { if (!tDiv.contains(e.relatedTarget)) tDiv.classList.remove('drag-over'); });
     tDiv.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault(); e.stopPropagation();
         tDiv.classList.remove('drag-over');
         const memberId = e.dataTransfer.getData('text/plain');
         if (memberId) await seatMemberOnTable(parseInt(memberId), table.id);
@@ -658,23 +648,20 @@ function buildTableElement(table, allMembers, index) {
 }
 
 function rotateTable(tableId, degrees) {
-    if (tableRotations[tableId] === undefined) {
-        tableRotations[tableId] = 0;
-    }
+    if (tableRotations[tableId] === undefined) tableRotations[tableId] = 0;
     tableRotations[tableId] = (tableRotations[tableId] + degrees) % 360;
     const tableEl = document.querySelector(`[data-table-id="${tableId}"]`);
     if (tableEl) {
         tableEl.style.transform = `rotate(${tableRotations[tableId]}deg)`;
-        const chairs = tableEl.querySelectorAll('.chair');
-        chairs.forEach(chair => {
+        tableEl.querySelectorAll('.chair').forEach(chair => {
             chair.style.transform = `translate(-50%, -50%) rotate(${-tableRotations[tableId]}deg)`;
         });
     }
 }
 
 async function seatMemberOnChair(memberId, tableId, seatIndex) {
-    const res = await fetch(
-        `/api/v1/guest-members/${memberId}/seat?table_id=${tableId}&seat_index=${seatIndex}`,
+    const res = await apiFetch(
+        `/api/v1/guest-members/${memberId}/seat?wedding_id=${weddingId}&table_id=${tableId}&seat_index=${seatIndex}`,
         { method: 'PUT' }
     );
     if (!res.ok) {
@@ -698,7 +685,6 @@ function openGuestPickerForSeat(tableId, seatIndex) {
     }
 
     const unseatedIds = new Set(globalUnseatedMembers.map(m => m.id.toString()));
-
     globalAllGuests.forEach(guest => {
         const guestUnseated = guest.members.filter(m => unseatedIds.has(m.id.toString()));
         if (guestUnseated.length === 0) return;
@@ -719,7 +705,6 @@ function openGuestPickerForSeat(tableId, seatIndex) {
             list.appendChild(btn);
         });
     });
-
     openModal('guestPickerModal');
 }
 
@@ -744,18 +729,13 @@ document.addEventListener('mousemove', (e) => {
         const wrapRect = document.getElementById('zoomWrapper').getBoundingClientRect();
         let x = (e.clientX - wrapRect.left) / zoomScale - dragOffset.x;
         let y = (e.clientY - wrapRect.top)  / zoomScale - dragOffset.y;
-
         activeMovingTable.style.left = x + 'px';
         activeMovingTable.style.top  = y + 'px';
-
         const tableId = activeMovingTable.getAttribute('data-table-id');
-        const currentRotation = tableRotations[tableId] || 0;
-        activeMovingTable.style.transform = `rotate(${currentRotation}deg)`;
-
+        activeMovingTable.style.transform = `rotate(${tableRotations[tableId] || 0}deg)`;
         tablePositions[tableId] = { x, y };
         return;
     }
-
     if (isPanning) {
         panOffset.x = e.clientX - panStart.x;
         panOffset.y = e.clientY - panStart.y;
@@ -764,10 +744,7 @@ document.addEventListener('mousemove', (e) => {
 });
 
 document.addEventListener('mouseup', () => {
-    if (activeMovingTable) {
-        activeMovingTable.classList.remove('dragging');
-        activeMovingTable = null;
-    }
+    if (activeMovingTable) { activeMovingTable.classList.remove('dragging'); activeMovingTable = null; }
     if (isPanning) {
         isPanning = false;
         const container = document.getElementById('hallContainer');
@@ -780,10 +757,9 @@ function deleteTable(id) {
     document.getElementById('confirmDeleteText').innerText = "Ցանկանո՞ւմ եք ջնջել այս սեղանը։ Բոլոր նստած հյուրերը կազատվեն։";
     openModal('confirmDeleteModal');
     document.getElementById('executeDeleteBtn').onclick = async () => {
-        await fetch(`/api/v1/tables/${id}`, { method: 'DELETE' });
+        await apiFetch(`/api/v1/tables/${id}?wedding_id=${weddingId}`, { method: 'DELETE' });
         closeModal('confirmDeleteModal');
-        loadTables();
-        loadUnseated();
+        loadTables(); loadUnseated();
     };
 }
 
@@ -802,7 +778,10 @@ function changeEditCapacity(delta) {
     document.getElementById('editCapacityDisplay').innerText = pendingEditCapacityVal;
 }
 async function confirmEditCapacity() {
-    const res = await fetch(`/api/v1/tables/${pendingEditTableId}/capacity?capacity=${pendingEditCapacityVal}`, { method: 'PUT' });
+    const res = await apiFetch(
+        `/api/v1/tables/${pendingEditTableId}/capacity?wedding_id=${weddingId}&capacity=${pendingEditCapacityVal}`,
+        { method: 'PUT' }
+    );
     if (res.ok) { closeModal('editCapacityModal'); loadTables(); }
     else { const err = await res.json().catch(() => ({})); alert(err.detail || 'Սխալ կատարվեց'); }
 }
@@ -810,14 +789,14 @@ async function confirmEditCapacity() {
 // ── TABLE SHEET ──
 async function openTableSheet(tableId) {
     const [guestsRes, tableRes] = await Promise.all([
-        fetch(`/api/v1/guests/wedding/${weddingId}`),
-        fetch(`/api/v1/tables/wedding/${weddingId}`)
+        apiFetch(`/api/v1/guests/wedding/${weddingId}`),
+        apiFetch(`/api/v1/tables/wedding/${weddingId}`)
     ]);
     if (!guestsRes.ok || !tableRes.ok) return;
 
     const guests = await guestsRes.json();
     const tables = await tableRes.json();
-    const table = tables.find(t => t.id === tableId);
+    const table  = tables.find(t => t.id === tableId);
     if (!table) return;
 
     const allMembers = [];
@@ -858,7 +837,7 @@ async function openTableSheet(tableId) {
             const row = document.createElement('div');
             row.style.cssText = 'display:flex;align-items:center;margin-bottom:6px;padding:8px;border:1px dashed #c9a96e;background:rgba(201,169,110,0.03);border-radius:8px;cursor:pointer;transition:all 0.2s;';
             row.onmouseover = () => { row.style.background = 'rgba(201,169,110,0.09)'; row.style.borderColor = '#1a1612'; };
-            row.onmouseout = () => { row.style.background = 'rgba(201,169,110,0.03)'; row.style.borderColor = '#c9a96e'; };
+            row.onmouseout  = () => { row.style.background = 'rgba(201,169,110,0.03)'; row.style.borderColor = '#c9a96e'; };
             row.onclick = () => { openGuestPicker(tableId); closeModal('tableSheetModal'); };
             row.innerHTML = `
                 <div style="display:flex;align-items:center;gap:8px;flex:1;">
@@ -881,20 +860,13 @@ function sheetRename(id, oldName) {
     document.getElementById('updateConfirmBtn').onclick = async () => {
         const newName = input.value.trim();
         if (!newName) return;
-        const res = await fetch(`/api/v1/guest-members/${id}/name?first_name=${encodeURIComponent(newName)}`, { method: 'PUT' });
+        const res = await apiFetch(
+            `/api/v1/guest-members/${id}/name?wedding_id=${weddingId}&first_name=${encodeURIComponent(newName)}`,
+            { method: 'PUT' }
+        );
         if (res.ok) {
             closeModal('renameMemberModal');
             closeModal('tableSheetModal');
-            globalAllGuests.forEach(guest => {
-                if (guest.members) {
-                    const member = guest.members.find(m => m.id === id);
-                    if (member) member.first_name = newName;
-                }
-            });
-            if (globalUnseatedMembers) {
-                const m = globalUnseatedMembers.find(m => m.id === id);
-                if (m) m.first_name = newName;
-            }
             loadTables(); loadGuests(); loadUnseated();
         }
     };
@@ -904,7 +876,7 @@ function sheetRemove(memberId) {
     document.getElementById('confirmDeleteText').innerText = 'Հեռացնե՞լ այս հյուրին սեղանից։';
     openModal('confirmDeleteModal');
     document.getElementById('executeDeleteBtn').onclick = async () => {
-        await fetch(`/api/v1/guest-members/${memberId}/seat`, { method: 'PUT' });
+        await apiFetch(`/api/v1/guest-members/${memberId}/seat?wedding_id=${weddingId}`, { method: 'PUT' });
         closeModal('confirmDeleteModal');
         closeModal('tableSheetModal');
         loadTables(); loadUnseated();
@@ -954,12 +926,9 @@ function openGuestPicker(tableId) {
 
 async function seatMemberOnTable(memberId, tableId) {
     const seatIndex = await findNextFreeSeat(tableId);
-    if (seatIndex === null) {
-        alert('Ազատ տեղ չկա այս սեղանի մոտ։');
-        return;
-    }
-    const res = await fetch(
-        `/api/v1/guest-members/${memberId}/seat?table_id=${tableId}&seat_index=${seatIndex}`,
+    if (seatIndex === null) { alert('Ազատ տեղ չկա այս սեղանի մոտ։'); return; }
+    const res = await apiFetch(
+        `/api/v1/guest-members/${memberId}/seat?wedding_id=${weddingId}&table_id=${tableId}&seat_index=${seatIndex}`,
         { method: 'PUT' }
     );
     if (!res.ok) {
@@ -971,21 +940,18 @@ async function seatMemberOnTable(memberId, tableId) {
 }
 
 async function findNextFreeSeat(tableId) {
-    const tableRes = await fetch(`/api/v1/tables/wedding/${weddingId}`);
+    const tableRes = await apiFetch(`/api/v1/tables/wedding/${weddingId}`);
     if (!tableRes.ok) return null;
     const tables = await tableRes.json();
-    const table = tables.find(t => t.id === tableId);
+    const table  = tables.find(t => t.id === tableId);
     if (!table) return null;
 
-    const membersRes = await fetch(`/api/v1/guest-members/wedding/${weddingId}`);
+    const membersRes = await apiFetch(`/api/v1/guest-members/wedding/${weddingId}`);
     if (!membersRes.ok) return null;
     const allMembers = await membersRes.json();
     const occupiedSeats = new Set(
-        allMembers
-            .filter(m => m.table_id === tableId && m.seat_index != null)
-            .map(m => m.seat_index)
+        allMembers.filter(m => m.table_id === tableId && m.seat_index != null).map(m => m.seat_index)
     );
-
     for (let i = 0; i < table.capacity; i++) {
         if (!occupiedSeats.has(i)) return i;
     }
@@ -1003,7 +969,7 @@ function manageSeatedMember(member) {
         document.getElementById('confirmDeleteText').innerText = `«${member.first_name || 'Անանուն'}» — հեռացնե՞լ սեղանից։`;
         openModal('confirmDeleteModal');
         document.getElementById('executeDeleteBtn').onclick = async () => {
-            await fetch(`/api/v1/guest-members/${member.id}/seat`, { method: 'PUT' });
+            await apiFetch(`/api/v1/guest-members/${member.id}/seat?wedding_id=${weddingId}`, { method: 'PUT' });
             closeModal('confirmDeleteModal');
             loadTables(); loadUnseated();
         };
@@ -1012,10 +978,9 @@ function manageSeatedMember(member) {
 }
 
 async function loadGuests() {
-    const res = await fetch(`/api/v1/guests/wedding/${weddingId}`);
+    const res = await apiFetch(`/api/v1/guests/wedding/${weddingId}`);
     if (!res.ok) { document.getElementById('guestsContainer').innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Սխալ</p>'; return; }
-    const guests = await res.json();
-    globalAllGuests = guests;
+    globalAllGuests = await res.json();
     renderGuestsList();
 }
 
@@ -1064,22 +1029,27 @@ function renderGuestsList() {
 }
 
 async function addGuest() {
-    const name = document.getElementById('guestName').value.trim();
+    const name  = document.getElementById('guestName').value.trim();
     const count = parseInt(document.getElementById('guestCount').value) || 1;
-    const side = document.getElementById('guestSide').value;
+    const side  = document.getElementById('guestSide').value;
     if (!name) { document.getElementById('guestName').focus(); return; }
-    const res = await fetch('/api/v1/guests/', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+    const res = await apiFetch(`/api/v1/guests/?wedding_id=${weddingId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wedding_id: weddingId, display_name: name, total_count: count, side, status: 'confirmed' })
     });
-    if (res.ok) { document.getElementById('guestName').value = ''; document.getElementById('guestCount').value = 1; loadGuests(); loadUnseated(); }
+    if (res.ok) {
+        document.getElementById('guestName').value = '';
+        document.getElementById('guestCount').value = 1;
+        loadGuests(); loadUnseated();
+    }
 }
 
 function deleteGuest(id) {
     document.getElementById('confirmDeleteText').innerText = "Ցանկանո՞ւմ եք ջնջել այս հրավերը և հեռացնել բոլոր անդամներին։";
     openModal('confirmDeleteModal');
     document.getElementById('executeDeleteBtn').onclick = async () => {
-        const res = await fetch(`/api/v1/guests/${id}`, { method: 'DELETE' });
+        const res = await apiFetch(`/api/v1/guests/${id}?wedding_id=${weddingId}`, { method: 'DELETE' });
         if (res.ok) { closeModal('confirmDeleteModal'); loadGuests(); loadUnseated(); loadTables(); }
         else alert('Չհաջողվեց ջնջել հրավերը');
     };
@@ -1090,17 +1060,14 @@ function quickRenameMember(id, oldName) {
     input.value = oldName;
     openModal('renameMemberModal');
     setTimeout(() => input.focus(), 100);
-
     document.getElementById('updateConfirmBtn').onclick = async () => {
         const newName = input.value.trim();
         if (!newName) return;
-        const res = await fetch(`/api/v1/guest-members/${id}/name?first_name=${encodeURIComponent(newName)}`, {
-            method: 'PUT'
-        });
-        if (res.ok) {
-            closeModal('renameMemberModal');
-            loadGuests(); loadTables(); loadUnseated();
-        }
+        const res = await apiFetch(
+            `/api/v1/guest-members/${id}/name?wedding_id=${weddingId}&first_name=${encodeURIComponent(newName)}`,
+            { method: 'PUT' }
+        );
+        if (res.ok) { closeModal('renameMemberModal'); loadGuests(); loadTables(); loadUnseated(); }
     };
 }
 
@@ -1114,22 +1081,27 @@ function toggleGuestSelect(cb) {
 async function mergeSelectedGuests() {
     const name = prompt('Նոր ընդհանուր անուն (օր.՝ Մարգարյան ընտանիք):');
     if (!name) return;
-    const res = await fetch(`/api/v1/guests/wedding/${weddingId}/merge`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+    const res = await apiFetch(`/api/v1/guests/wedding/${weddingId}/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guest_ids: selectedGuestIds, new_display_name: name })
     });
-    if (res.ok) { selectedGuestIds = []; document.getElementById('mergeBar').classList.add('hidden'); loadGuests(); loadUnseated(); loadTables(); }
+    if (res.ok) {
+        selectedGuestIds = [];
+        document.getElementById('mergeBar').classList.add('hidden');
+        loadGuests(); loadUnseated(); loadTables();
+    }
 }
 
 async function loadUnseated() {
     const [gR, uR] = await Promise.all([
-        fetch(`/api/v1/guests/wedding/${weddingId}`),
-        fetch(`/api/v1/guest-members/wedding/${weddingId}/unseated`)
+        apiFetch(`/api/v1/guests/wedding/${weddingId}`),
+        apiFetch(`/api/v1/guest-members/wedding/${weddingId}/unseated`)
     ]);
     const container = document.getElementById('unseatedContainer');
     if (!gR.ok || !uR.ok) { container.innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Սխալ</p>'; return; }
-    globalAllGuests = await gR.json();
-    globalUnseatedMembers = await uR.json();
+    globalAllGuests        = await gR.json();
+    globalUnseatedMembers  = await uR.json();
     renderUnseatedList();
 }
 
@@ -1137,7 +1109,7 @@ function renderUnseatedList() {
     const container = document.getElementById('unseatedContainer');
     if (!container) return;
 
-    const unseatedIds = new Set(globalUnseatedMembers.map(m => m.id));
+    const unseatedIds  = new Set(globalUnseatedMembers.map(m => m.id));
     const totalMembers = globalAllGuests.reduce((s, g) => s + g.total_count, 0);
     document.getElementById('unseatedSummary').innerText = `${totalMembers - globalUnseatedMembers.length} / ${totalMembers} հոգի նստեցված`;
 
@@ -1151,13 +1123,13 @@ function renderUnseatedList() {
 
     globalAllGuests.forEach(guest => {
         if (typeof currentUnseatedFilter !== 'undefined' && currentUnseatedFilter !== 'all' && guest.side !== currentUnseatedFilter) return;
-
         hasVisibleGuests = true;
+
         const guestUnseated = guest.members.filter(m => unseatedIds.has(m.id));
-        const total = guest.members.length;
+        const total       = guest.members.length;
         const unseatCount = guestUnseated.length;
-        const pillCls = unseatCount === 0 ? 'bg-[#7a9e7e]/10 text-[#7a9e7e]' :
-                        unseatCount === total ? 'bg-[#c4736a]/10 text-[#c4736a]' : 'bg-[#c9a96e]/15 text-[#8a6c30]';
+        const pillCls  = unseatCount === 0 ? 'bg-[#7a9e7e]/10 text-[#7a9e7e]' :
+                         unseatCount === total ? 'bg-[#c4736a]/10 text-[#c4736a]' : 'bg-[#c9a96e]/15 text-[#8a6c30]';
         const pillText = unseatCount === 0 ? '✓ Բոլոր' : unseatCount === total ? `${unseatCount} չնստ.` : `${unseatCount}/${total}`;
 
         const card = document.createElement('div');
@@ -1175,11 +1147,9 @@ function renderUnseatedList() {
         `;
 
         const expandDiv = document.createElement('div');
-        if (typeof openedGroupIds !== 'undefined' && openedGroupIds.has(guest.id)) {
-            expandDiv.className = 'border-t border-[#f7f3ee]';
-        } else {
-            expandDiv.className = 'border-t border-[#f7f3ee] hidden';
-        }
+        expandDiv.className = typeof openedGroupIds !== 'undefined' && openedGroupIds.has(guest.id)
+            ? 'border-t border-[#f7f3ee]'
+            : 'border-t border-[#f7f3ee] hidden';
 
         guest.members.forEach(m => {
             const isSeated = !unseatedIds.has(m.id);
@@ -1235,23 +1205,23 @@ function renderUnseatedList() {
 }
 
 async function unseatMember(memberId) {
-    await fetch(`/api/v1/guest-members/${memberId}/seat`, { method: 'PUT' });
+    await apiFetch(`/api/v1/guest-members/${memberId}/seat?wedding_id=${weddingId}`, { method: 'PUT' });
     loadTables(); loadUnseated();
 }
 
 function openSeatCountModal(guestId) {
     const guest = globalAllGuests.find(g => g.id === guestId);
     if (!guest) return;
-    const unseatedIds = new Set(globalUnseatedMembers.map(m => m.id));
+    const unseatedIds   = new Set(globalUnseatedMembers.map(m => m.id));
     const guestUnseated = guest.members.filter(m => unseatedIds.has(m.id));
     if (guestUnseated.length === 0) { alert('Բոլոր անդամները արդեն նստեցված են։'); return; }
 
     pendingSeatGuest = { guestId, display_name: guest.display_name, unseatedMembers: guestUnseated };
     pendingSeatCount = guestUnseated.length;
-    document.getElementById('seatCountTitle').innerText = guest.display_name;
+    document.getElementById('seatCountTitle').innerText   = guest.display_name;
     document.getElementById('seatCountDisplay').innerText = pendingSeatCount;
-    document.getElementById('seatCountMax').innerText = `Ընդամենը ${guestUnseated.length} հոգի սպասում է`;
-    document.getElementById('seatCountHint').innerText = `Ընտրեք՝ քանիսին այս անգամ նստեցնել։`;
+    document.getElementById('seatCountMax').innerText     = `Ընդամենը ${guestUnseated.length} հոգի սպասում է`;
+    document.getElementById('seatCountHint').innerText    = `Ընտրեք՝ քանիսին այս անգամ նստեցնել։`;
     openModal('seatCountModal');
 }
 function changeSeatCount(delta) {
@@ -1267,8 +1237,8 @@ async function confirmSeatCount() {
 
 async function openTablePicker(guestInfo, count) {
     const [tR, gR] = await Promise.all([
-        fetch(`/api/v1/tables/wedding/${weddingId}`),
-        fetch(`/api/v1/guests/wedding/${weddingId}`)
+        apiFetch(`/api/v1/tables/wedding/${weddingId}`),
+        apiFetch(`/api/v1/guests/wedding/${weddingId}`)
     ]);
     if (!tR.ok) return;
     const tables = await tR.json();
@@ -1285,10 +1255,10 @@ async function openTablePicker(guestInfo, count) {
     }
 
     tables.forEach(table => {
-        const seated = allMembers.filter(m => m.table_id === table.id).length;
+        const seated    = allMembers.filter(m => m.table_id === table.id).length;
         const available = table.capacity - seated;
-        const canFit = available >= count;
-        const pct = Math.round((seated / table.capacity) * 100);
+        const canFit    = available >= count;
+        const pct       = Math.round((seated / table.capacity) * 100);
 
         const btn = document.createElement('button');
         btn.disabled = !canFit;
@@ -1314,12 +1284,9 @@ async function openTablePicker(guestInfo, count) {
 async function seatGroupOnTable(guestInfo, count, tableId) {
     for (const member of guestInfo.unseatedMembers.slice(0, count)) {
         const seatIndex = await findNextFreeSeat(tableId);
-        if (seatIndex === null) {
-            alert('Ազատ տեղ չկա կամ լրացավ սեղանը։');
-            break;
-        }
-        const res = await fetch(
-            `/api/v1/guest-members/${member.id}/seat?table_id=${tableId}&seat_index=${seatIndex}`,
+        if (seatIndex === null) { alert('Ազատ տեղ չկա կամ լրացավ սեղանը։'); break; }
+        const res = await apiFetch(
+            `/api/v1/guest-members/${member.id}/seat?wedding_id=${weddingId}&table_id=${tableId}&seat_index=${seatIndex}`,
             { method: 'PUT' }
         );
         if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.detail || 'Սխալ'); break; }
@@ -1327,7 +1294,7 @@ async function seatGroupOnTable(guestInfo, count, tableId) {
     loadTables(); loadUnseated(); loadGuests();
 }
 
-let currentMainFilter = 'all';
+let currentMainFilter    = 'all';
 let currentUnseatedFilter = 'all';
 const openedGroupIds = new Set();
 
@@ -1373,27 +1340,18 @@ document.addEventListener('keydown', (e) => {
 
 async function exportToPDF() {
     const [tablesRes, guestsRes] = await Promise.all([
-        fetch(`/api/v1/tables/wedding/${weddingId}`),
-        fetch(`/api/v1/guests/wedding/${weddingId}`)
+        apiFetch(`/api/v1/tables/wedding/${weddingId}`),
+        apiFetch(`/api/v1/guests/wedding/${weddingId}`)
     ]);
-
-    if (!tablesRes.ok || !guestsRes.ok) {
-        alert("Չհաջողվեց ներբեռնել տվյալները PDF-ի համար։");
-        return;
-    }
+    if (!tablesRes.ok || !guestsRes.ok) { alert("Չհաջողվեց ներբեռնել տվյալները PDF-ի համար։"); return; }
 
     const tables = await tablesRes.json();
     const guests = await guestsRes.json();
-
     tables.sort((a, b) => parseInt(a.table_number) - parseInt(b.table_number));
 
     const allMembers = [];
     guests.forEach(g => {
-        if (g.members) {
-            g.members.forEach(m => {
-                allMembers.push({ ...m, guest_display_name: g.display_name });
-            });
-        }
+        if (g.members) g.members.forEach(m => allMembers.push({ ...m, guest_display_name: g.display_name }));
     });
 
     const { jsPDF } = window.jspdf;
@@ -1404,22 +1362,16 @@ async function exportToPDF() {
     doc.text("HURERI NSTECMAN CUC AK", 14, 15);
 
     const tableRows = [];
-
     tables.forEach(table => {
         const seatedHere = allMembers.filter(m => m.table_id === table.id);
         seatedHere.sort((a, b) => (a.seat_index || 0) - (b.seat_index || 0));
-
         if (seatedHere.length === 0) {
             tableRows.push([`Sg. ${table.table_number}`, "Datark seghan", ""]);
         } else {
             seatedHere.forEach((m, idx) => {
-                const chairNum = m.seat_index !== null ? m.seat_index + 1 : idx + 1;
+                const chairNum  = m.seat_index !== null ? m.seat_index + 1 : idx + 1;
                 const seghanCell = idx === 0 ? `Seghan ${table.table_number}` : "";
-                tableRows.push([
-                    seghanCell,
-                    `Ator ${chairNum}`,
-                    m.first_name || "Ananun Hyur"
-                ]);
+                tableRows.push([seghanCell, `Ator ${chairNum}`, m.first_name || "Ananun Hyur"]);
             });
         }
         tableRows.push(["", "", ""]);
@@ -1432,11 +1384,7 @@ async function exportToPDF() {
         theme: 'striped',
         headStyles: { fillColor: [26, 22, 18], textColor: [232, 213, 176], fontStyle: 'bold' },
         styles: { font: 'Helvetica', fontSize: 10, cellPadding: 3 },
-        columnStyles: {
-            0: { fontStyle: 'bold', cellWidth: 40 },
-            1: { cellWidth: 30 },
-            2: { fontStyle: 'normal' }
-        },
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 30 } },
         didParseCell: function (data) {
             if (data.row.raw[0] === "" && data.row.raw[1] === "" && data.row.raw[2] === "") {
                 data.cell.styles.fillColor = [255, 255, 255];

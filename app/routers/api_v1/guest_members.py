@@ -1,41 +1,49 @@
 from fastapi import APIRouter, Depends
 from typing import List, Optional
+
 from app.schemas.guest_members import GuestMemberResponse
 from app.services.guest_members import GuestMemberService
-from app.dependencies import get_guest_member_service  # <-- Օգտագործում ենք նոր դիպենդենսին
+from app.dependencies import get_guest_member_service, verify_wedding_token
 
 router = APIRouter(prefix="/api/v1/guest-members", tags=["Guest Members"])
+
 
 @router.put("/{member_id}/seat", response_model=GuestMemberResponse)
 def seat_member(
     member_id: int,
+    wedding_id: int,                                  # query param — token check-ի համար
     table_id: Optional[int] = None,
-    seat_index: Optional[int] = None,  # ✅ Նոր query param
-    service: GuestMemberService = Depends(get_guest_member_service)
+    seat_index: Optional[int] = None,
+    service: GuestMemberService = Depends(get_guest_member_service),
+    _: int = Depends(verify_wedding_token),
 ):
     return service.seat_member(member_id, table_id, seat_index)
+
 
 @router.put("/{member_id}/name", response_model=GuestMemberResponse)
 def update_member_name(
     member_id: int,
+    wedding_id: int,
     first_name: str,
-    service: GuestMemberService = Depends(get_guest_member_service)
+    service: GuestMemberService = Depends(get_guest_member_service),
+    _: int = Depends(verify_wedding_token),
 ):
-    """Թարմացնում է անհատական աթոռի անունը (Խմբագրման/Split-ի ժամանակ)"""
     return service.update_member_name(member_id, first_name)
+
 
 @router.get("/wedding/{wedding_id}/unseated", response_model=List[GuestMemberResponse])
 def get_unseated_members(
     wedding_id: int,
-    service: GuestMemberService = Depends(get_guest_member_service)
+    service: GuestMemberService = Depends(get_guest_member_service),
+    _: int = Depends(verify_wedding_token),
 ):
-    """Վերադարձնում է միայն այն անդամներին, ովքեր դեռ սեղան չունեն"""
     return service.get_unseated_members(wedding_id)
+
 
 @router.get("/wedding/{wedding_id}", response_model=List[GuestMemberResponse])
 def get_wedding_guest_members(
     wedding_id: int,
-    service: GuestMemberService = Depends(get_guest_member_service)
+    service: GuestMemberService = Depends(get_guest_member_service),
+    _: int = Depends(verify_wedding_token),
 ):
-    """Վերադարձնում է տվյալ հարսանիքի բոլոր հյուր-անդամներին"""
     return service.get_all_members_by_wedding(wedding_id)
