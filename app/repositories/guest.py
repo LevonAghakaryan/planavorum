@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.models.guest import Guest
 from app.schemas.guest import GuestCreate
 from typing import List
@@ -25,7 +25,11 @@ class GuestRepository:
         return self.db.query(Guest).filter(Guest.id == guest_id).first()
 
     def get_by_wedding(self, wedding_id: int) -> List[Guest]:
-        return self.db.query(Guest).filter(Guest.wedding_id == wedding_id).all()
+        # N+1 խնդրի լուծում. joinedload-ը բոլոր members-ին բերում է մեկ հարցումով
+        return self.db.query(Guest)\
+            .options(joinedload(Guest.members))\
+            .filter(Guest.wedding_id == wedding_id)\
+            .all()
 
     def update_total_count(self, guest_id: int, new_count: int) -> Guest | None:
         db_guest = self.get_by_id(guest_id)

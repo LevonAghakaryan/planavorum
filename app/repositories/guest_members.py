@@ -1,7 +1,7 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.models.guest_members import GuestMember
 from typing import List, Optional
-
+from app.models.guest import Guest
 
 class GuestMemberRepository:
     def __init__(self, db: Session):
@@ -17,9 +17,10 @@ class GuestMemberRepository:
 
     def get_unseated_by_wedding(self, wedding_id: int) -> List[GuestMember]:
         """Վերադարձնում է այն անդամներին, ովքեր դեռ սեղանին նստեցված չեն (table_id IS NULL)"""
-        from app.models.guest import Guest
+        # joinedload-ը թույլ է տալիս միանգամից ստանալ նաև Guest օբյեկտը՝ առանց լրացուցիչ հարցումների
         return (
             self.db.query(GuestMember)
+            .options(joinedload(GuestMember.guest))
             .join(Guest)
             .filter(Guest.wedding_id == wedding_id, GuestMember.table_id.is_(None))
             .all()
@@ -50,9 +51,10 @@ class GuestMemberRepository:
 
     def get_all_by_wedding(self, wedding_id: int) -> List[GuestMember]:
         """Վերադարձնում է տվյալ հարսանիքի բոլոր հյուր-անդամներին (աթոռներին)"""
-        from app.models.guest import Guest
+        # joinedload-ը օպտիմալացնում է հարցումը, որպեսզի Guest օբյեկտը հասանելի լինի
         return (
             self.db.query(GuestMember)
+            .options(joinedload(GuestMember.guest))
             .join(Guest)
             .filter(Guest.wedding_id == wedding_id)
             .all()

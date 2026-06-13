@@ -27,6 +27,9 @@ class GuestService:
         # 3. Պահպանում ենք բոլոր աթոռները բազայում (Bulk Insert)
         self.member_repo.create_bulk(members_to_create)
 
+        # FIX: Թարմացնում ենք օբյեկտը, որպեսզի members-ը հասանելի լինեն
+        self.guest_repo.db.refresh(db_guest)
+
         return db_guest
 
     def merge_guests(self, wedding_id: int, merge_data: GuestsMergeRequest):
@@ -58,13 +61,19 @@ class GuestService:
         for g_id in merge_data.guest_ids:
             old_members = self.member_repo.get_by_guest_id(g_id)
             for member in old_members:
-                # Եթե անունը դատարկ էր, կարող ենք թողնել դատարկ, կամ թարմացնել
                 member.guest_id = new_guest.id
 
-            # 4. Ջնջում ենք հին հրավերը (cascade-ը չի աշխատի, քանի որ ID-ն արդեն փոխեցինք)
+            # FIX: flush(), որպեսզի տեղափոխումը գրանցվի նախքան հին հյուրին ջնջելը
+            self.guest_repo.db.flush()
+
+            # 4. Ջնջում ենք հին հրավերը
             self.guest_repo.delete(g_id)
 
         self.guest_repo.db.commit()
+
+        # FIX: Թարմացնում ենք, որպեսզի նոր հյուրը վերադարձվի իր անդամների հետ միասին
+        self.guest_repo.db.refresh(new_guest)
+
         return new_guest
 
     def get_wedding_guests(self, wedding_id: int):

@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.models.table import Table
 from app.schemas.table import TableCreate
 from typing import List
@@ -21,10 +21,22 @@ class TableRepository:
         return db_table
 
     def get_by_wedding(self, wedding_id: int) -> List[Table]:
-        return self.db.query(Table).filter(Table.wedding_id == wedding_id).all()
+        # joinedload-ը բերում է նաև սեղանի բոլոր անդամներին (members) մեկ հարցումով
+        return (
+            self.db.query(Table)
+            .options(joinedload(Table.members))
+            .filter(Table.wedding_id == wedding_id)
+            .all()
+        )
 
     def get_by_id(self, table_id: int) -> Table | None:
-        return self.db.query(Table).filter(Table.id == table_id).first()
+        # Այստեղ էլ կարող ես ավելացնել joinedload, եթե կոնկրետ սեղանի էջում ես բացում հյուրերին
+        return (
+            self.db.query(Table)
+            .options(joinedload(Table.members))
+            .filter(Table.id == table_id)
+            .first()
+        )
 
     def update_capacity(self, table_id: int, capacity: int) -> Table | None:
         db_table = self.get_by_id(table_id)
