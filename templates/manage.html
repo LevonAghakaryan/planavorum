@@ -35,6 +35,15 @@
         .zoom-wrapper { position: absolute; top: 0; left: 0; width: 4000px; height: 4000px; transform-origin: top left; }
         .movable-table { position: absolute; cursor: move; user-select: none; }
         .movable-table.dragging { z-index: 100; }
+
+        /* Side color accents on table borders */
+        .movable-table[data-side="bride"] .table-inner  { border-color: #c4736a !important; }
+        .movable-table[data-side="groom"] .table-inner  { border-color: #7a9e7e !important; }
+        .movable-table[data-side="mutual"] .table-inner { border-color: #cfc4b4; }
+
+        /* Hall filter hidden tables */
+        .movable-table.hall-hidden { display: none !important; }
+
         .chair {
             position: absolute;
             width: 26px; height: 26px;
@@ -65,6 +74,9 @@
         .modal-overlay { position: fixed; inset: 0; background: rgba(26,22,18,0.55); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 200; }
         .modal-overlay.open { display: flex; }
         input[type=number]::-webkit-inner-spin-button { opacity: 1; }
+
+        /* Save indicator */
+        #saveIndicator { transition: opacity 0.4s; }
     </style>
 </head>
 <body class="bg-[#f7f3ee] text-[#1a1612] h-screen flex flex-col overflow-hidden">
@@ -75,6 +87,8 @@
         <a href="/" class="text-[#e8d5b0] opacity-60 hover:opacity-100 transition-opacity text-lg no-underline">←</a>
         <h1 id="weddingHeaderTitle" class="font-cormorant text-[#e8d5b0] text-xl font-semibold tracking-wide">Բեռնվում է...</h1>
     </div>
+    <!-- Save indicator -->
+    <div id="saveIndicator" class="text-[11px] text-[#c9a96e] opacity-0">✓ Դիրքերը պահպանված են</div>
 </header>
 
 <main class="flex-1 grid overflow-hidden" style="grid-template-columns: 280px 1fr 260px;">
@@ -123,30 +137,46 @@
     <!-- CENTER: Hall -->
     <div class="relative overflow-hidden bg-[#fdfaf6]">
 
-        <!-- DROPDOWN MENU BAR -->
-        <div class="absolute left-4 top-3 z-30 inline-block text-left">
-            <div>
-                <button onclick="toggleTableMenu(event)" id="tableMenuBtn" class="flex items-center gap-2 px-4 py-2 bg-white/90 backdrop-blur-sm border border-[#e8ddd0] rounded-xl text-xs font-semibold text-[#1a1612] shadow-sm hover:border-[#c9a96e] hover:bg-white transition-all">
+        <!-- TOP BAR: Add table + Hall side filter -->
+        <div class="absolute left-4 top-3 z-30 flex items-center gap-2 flex-wrap">
+
+            <!-- Add table dropdown -->
+            <div class="inline-block text-left relative">
+                <button onclick="toggleTableMenu(event)" id="tableMenuBtn"
+                    class="flex items-center gap-2 px-4 py-2 bg-white/90 backdrop-blur-sm border border-[#e8ddd0] rounded-xl text-xs font-semibold text-[#1a1612] shadow-sm hover:border-[#c9a96e] hover:bg-white transition-all">
                     ➕ Ավելացնել Սեղան <span class="text-[9px] text-[#8c7b66] transition-transform duration-200" id="menuArrow">▼</span>
                 </button>
+                <div id="tableDropdownMenu" class="hidden absolute left-0 mt-1.5 w-44 rounded-xl bg-white border border-[#e8ddd0] shadow-xl z-40 p-1 space-y-0.5">
+                    <button onclick="triggerMenuAction('round')" class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[#5c4f3d] hover:bg-[#c9a96e]/10 hover:text-[#1a1612] rounded-lg transition-colors text-left">
+                        <span class="w-3.5 h-3.5 rounded-full border border-[#1a1612]/30 bg-[#e8e0d4] inline-block"></span> Կլոր սեղան
+                    </button>
+                    <button onclick="triggerMenuAction('rectangle')" class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[#5c4f3d] hover:bg-[#c9a96e]/10 hover:text-[#1a1612] rounded-lg transition-colors text-left">
+                        <span class="w-4.5 h-2.5 rounded-sm border border-[#1a1612]/30 bg-[#e8e0d4] inline-block"></span> Ուղղանկյուն
+                    </button>
+                    <button onclick="triggerMenuAction('double_rectangle')" class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[#5c4f3d] hover:bg-[#c9a96e]/10 hover:text-[#1a1612] rounded-lg transition-colors text-left">
+                        <span class="w-5 h-2.5 rounded-sm border border-[#1a1612]/30 bg-[#e8e0d4] inline-block"></span> Կրկնակի Ուղղ.
+                    </button>
+                    <div class="h-[1px] bg-[#f0eae2] my-1 mx-1"></div>
+                    <button onclick="triggerMenuAction('presidium')" class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[#8a6c30] hover:bg-[#c9a96e]/15 rounded-lg transition-colors text-left">
+                        <span class="text-xs">👑</span> Պրեզիդիում
+                    </button>
+                </div>
             </div>
-            <div id="tableDropdownMenu" class="hidden absolute left-0 mt-1.5 w-44 rounded-xl bg-white border border-[#e8ddd0] shadow-xl z-40 p-1 space-y-0.5">
-                <button onclick="triggerMenuAction('round')" class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[#5c4f3d] hover:bg-[#c9a96e]/10 hover:text-[#1a1612] rounded-lg transition-colors text-left">
-                    <span class="w-3.5 h-3.5 rounded-full border border-[#1a1612]/30 bg-[#e8e0d4] inline-block"></span> Կլոր սեղան
-                </button>
-                <button onclick="triggerMenuAction('rectangle')" class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[#5c4f3d] hover:bg-[#c9a96e]/10 hover:text-[#1a1612] rounded-lg transition-colors text-left">
-                    <span class="w-4.5 h-2.5 rounded-sm border border-[#1a1612]/30 bg-[#e8e0d4] inline-block"></span> Ուղղանկյուն
-                </button>
-                <button onclick="triggerMenuAction('double_rectangle')" class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[#5c4f3d] hover:bg-[#c9a96e]/10 hover:text-[#1a1612] rounded-lg transition-colors text-left">
-                    <span class="w-5 h-2.5 rounded-sm border border-[#1a1612]/30 bg-[#e8e0d4] inline-block"></span> Կրկնակի Ուղղ.
-                </button>
-                <div class="h-[1px] bg-[#f0eae2] my-1 mx-1"></div>
-                <button onclick="triggerMenuAction('presidium')" class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[#8a6c30] hover:bg-[#c9a96e]/15 rounded-lg transition-colors text-left">
-                    <span class="text-xs">👑</span> Պրեզիդիում
-                </button>
+
+            <!-- Hall side filter pills -->
+            <div class="flex gap-1 bg-white/90 backdrop-blur-sm border border-[#e8ddd0] rounded-xl p-1 shadow-sm">
+                <button onclick="filterHall('all')"   id="hf-all"   class="hf-pill px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-[#1a1612] text-[#e8d5b0] transition-all">Բոլ.</button>
+                <button onclick="filterHall('bride')" id="hf-bride" class="hf-pill px-3 py-1.5 text-[11px] font-semibold rounded-lg text-[#5c4f3d] hover:bg-[#f7f3ee] transition-all">👰</button>
+                <button onclick="filterHall('groom')" id="hf-groom" class="hf-pill px-3 py-1.5 text-[11px] font-semibold rounded-lg text-[#5c4f3d] hover:bg-[#f7f3ee] transition-all">🤵</button>
+                <button onclick="filterHall('mutual')" id="hf-mutual" class="hf-pill px-3 py-1.5 text-[11px] font-semibold rounded-lg text-[#5c4f3d] hover:bg-[#f7f3ee] transition-all">🤝</button>
             </div>
+
+            <!-- PDF + Save positions -->
             <button onclick="exportToPDF()" class="flex items-center gap-2 bg-[#7a9e7e] hover:bg-[#688a6c] text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm transition-all cursor-pointer">
-                🖨️ Տպել Ցուցակը (PDF)
+                🖨️ PDF
+            </button>
+            <button onclick="saveAllPositions()" class="flex items-center gap-2 bg-[#c9a96e] hover:bg-[#b8935a] text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm transition-all cursor-pointer">
+                💾 Պահ. դիրքը
             </button>
         </div>
 
@@ -192,6 +222,24 @@
                 <label class="block text-[10px] font-semibold text-[#8c7b66] uppercase tracking-wider mb-1.5">Սեղանի համարը / անունը</label>
                 <input id="newTableNumber" type="text" placeholder="Օր.՝ 1, A, VIP..."
                     class="w-full px-3 py-2 rounded-lg border border-[#e8ddd0] bg-white text-sm text-[#1a1612] placeholder-[#c8bfb2] focus:border-[#c9a96e] transition-colors">
+            </div>
+            <!-- Side selection -->
+            <div>
+                <label class="block text-[10px] font-semibold text-[#8c7b66] uppercase tracking-wider mb-1.5">Կողմ</label>
+                <div class="flex gap-2">
+                    <button onclick="selectNewTableSide('bride')" id="nts-bride"
+                        class="nts-btn flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-all border-[#e8ddd0] text-[#5c4f3d] hover:border-[#c4736a]">
+                        👰 Հարսի
+                    </button>
+                    <button onclick="selectNewTableSide('groom')" id="nts-groom"
+                        class="nts-btn flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-all border-[#e8ddd0] text-[#5c4f3d] hover:border-[#7a9e7e]">
+                        🤵 Փեսայի
+                    </button>
+                    <button onclick="selectNewTableSide('mutual')" id="nts-mutual"
+                        class="nts-btn flex-1 py-1.5 rounded-lg border-2 border-[#c9a96e] text-xs font-semibold bg-[#c9a96e]/10 text-[#8a6c30] transition-all">
+                        🤝 Ընդհ.
+                    </button>
+                </div>
             </div>
             <div>
                 <label class="block text-[10px] font-semibold text-[#8c7b66] uppercase tracking-wider mb-1.5">Աթոռների քանակ</label>
@@ -341,9 +389,6 @@
 const weddingId    = {{ wedding_id }};
 const weddingToken = "{{ wedding_token }}";
 
-// ── Secure fetch wrapper ──────────────────────────────────────────────────────
-// Ամեն API request-ին ավտոմատ ավելացնում է X-Wedding-Token header։
-// Ստորև ոչ մի fetch() կոչ չի փոխվել — միայն apiFetch() է կոչվում։
 async function apiFetch(url, options = {}) {
     options.headers = {
         ...(options.headers || {}),
@@ -365,13 +410,52 @@ let pendingSeatGuest = null;
 let pendingSeatCount = 1;
 let pendingSeatTableId = null;
 let pendingSeatIndex = null;
+
+// tablePositions — հիմա DB-ից են գալիս (x_pos/y_pos), JS-ում՝ live override
 const tablePositions = {};
 const tableRotations = {};
 
 let pendingNewCategory = null;
 let pendingNewCapacity = 10;
+let pendingNewSide = 'mutual';
 const defaultCapacity = { round: 12, rectangle: 8, double_rectangle: 16, presidium: 6 };
 const catLabel = { round: 'Կլոր', rectangle: 'Ուղղ.', double_rectangle: 'Կրկ. Ուղղ.', presidium: 'Պրեզիդիում' };
+
+// Hall filter
+let currentHallFilter = 'all';
+
+// Auto-save debounce
+let saveTimer = null;
+function scheduleSave(tableId) {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+        const pos = tablePositions[tableId];
+        if (pos) saveTablePosition(tableId, pos.x, pos.y);
+    }, 1000);
+}
+
+async function saveTablePosition(tableId, x, y) {
+    await apiFetch(`/api/v1/tables/${tableId}/position?wedding_id=${weddingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x_pos: x, y_pos: y })
+    });
+    showSaveIndicator();
+}
+
+async function saveAllPositions() {
+    const tasks = Object.entries(tablePositions).map(([id, pos]) =>
+        saveTablePosition(parseInt(id), pos.x, pos.y)
+    );
+    await Promise.all(tasks);
+    showSaveIndicator();
+}
+
+function showSaveIndicator() {
+    const el = document.getElementById('saveIndicator');
+    el.style.opacity = '1';
+    setTimeout(() => { el.style.opacity = '0'; }, 2000);
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     loadWeddingDetails();
@@ -388,15 +472,11 @@ document.addEventListener('DOMContentLoaded', () => {
             panStart.x = e.clientX - panOffset.x;
             panStart.y = e.clientY - panOffset.y;
         });
-
         container.addEventListener('wheel', (e) => {
             e.preventDefault();
             const zoomFactor = 1.08;
-            if (e.deltaY < 0) {
-                zoomScale = Math.min(2.5, zoomScale * zoomFactor);
-            } else {
-                zoomScale = Math.max(0.3, zoomScale / zoomFactor);
-            }
+            if (e.deltaY < 0) zoomScale = Math.min(2.5, zoomScale * zoomFactor);
+            else zoomScale = Math.max(0.3, zoomScale / zoomFactor);
             updateCanvasTransform();
         }, { passive: false });
     }
@@ -415,18 +495,26 @@ async function loadWeddingDetails() {
 // ── ZOOM & PAN ──
 function updateCanvasTransform() {
     const wrapper = document.getElementById('zoomWrapper');
-    if (wrapper) {
-        wrapper.style.transform = `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`;
-    }
+    if (wrapper) wrapper.style.transform = `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`;
 }
-function zoomHall(f) {
-    zoomScale = Math.min(2.5, Math.max(0.3, zoomScale * f));
-    updateCanvasTransform();
-}
-function resetZoom() {
-    zoomScale = 1.0;
-    panOffset = { x: 0, y: 0 };
-    updateCanvasTransform();
+function zoomHall(f) { zoomScale = Math.min(2.5, Math.max(0.3, zoomScale * f)); updateCanvasTransform(); }
+function resetZoom() { zoomScale = 1.0; panOffset = { x: 0, y: 0 }; updateCanvasTransform(); }
+
+// ── HALL SIDE FILTER ──
+function filterHall(side) {
+    currentHallFilter = side;
+    ['all','bride','groom','mutual'].forEach(s => {
+        const btn = document.getElementById(`hf-${s}`);
+        if (!btn) return;
+        btn.className = s === side
+            ? 'hf-pill px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-[#1a1612] text-[#e8d5b0] transition-all'
+            : 'hf-pill px-3 py-1.5 text-[11px] font-semibold rounded-lg text-[#5c4f3d] hover:bg-[#f7f3ee] transition-all';
+    });
+    document.querySelectorAll('.movable-table').forEach(el => {
+        const tSide = el.getAttribute('data-side') || 'mutual';
+        if (side === 'all' || tSide === side) el.classList.remove('hall-hidden');
+        else el.classList.add('hall-hidden');
+    });
 }
 
 // ── DROPDOWN MENU ──
@@ -439,26 +527,34 @@ function toggleTableMenu(event) {
     else { menu.classList.add('hidden'); arrow.style.transform = 'rotate(0deg)'; }
 }
 function triggerMenuAction(category) {
-    const menu = document.getElementById('tableDropdownMenu');
-    const arrow = document.getElementById('menuArrow');
-    menu.classList.add('hidden');
-    arrow.style.transform = 'rotate(0deg)';
+    document.getElementById('tableDropdownMenu').classList.add('hidden');
+    document.getElementById('menuArrow').style.transform = 'rotate(0deg)';
     startAddTable(category);
 }
 document.addEventListener('click', (e) => {
     const menu = document.getElementById('tableDropdownMenu');
-    const arrow = document.getElementById('menuArrow');
     const btn = document.getElementById('tableMenuBtn');
     if (menu && !menu.classList.contains('hidden') && e.target !== btn && !btn.contains(e.target)) {
         menu.classList.add('hidden');
-        arrow.style.transform = 'rotate(0deg)';
+        document.getElementById('menuArrow').style.transform = 'rotate(0deg)';
     }
 });
 
 // ── ADD TABLE FLOW ──
+function selectNewTableSide(side) {
+    pendingNewSide = side;
+    document.querySelectorAll('.nts-btn').forEach(b => {
+        b.className = 'nts-btn flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-all border-[#e8ddd0] text-[#5c4f3d]';
+    });
+    const colors = { bride:'border-[#c4736a] bg-[#c4736a]/10 text-[#c4736a]', groom:'border-[#7a9e7e] bg-[#7a9e7e]/10 text-[#7a9e7e]', mutual:'border-[#c9a96e] bg-[#c9a96e]/10 text-[#8a6c30]' };
+    const el = document.getElementById(`nts-${side}`);
+    if (el) el.className = `nts-btn flex-1 py-1.5 rounded-lg border-2 text-xs font-semibold transition-all ${colors[side]}`;
+}
+
 function startAddTable(category) {
     pendingNewCategory = category;
     pendingNewCapacity = defaultCapacity[category] || 10;
+    pendingNewSide = 'mutual';
     document.getElementById('addTableModalTitle').innerText = `Նոր ${catLabel[category]} սեղան`;
     document.getElementById('newCapacityDisplay').innerText = pendingNewCapacity;
     document.getElementById('newTableNumber').value = '';
@@ -467,6 +563,8 @@ function startAddTable(category) {
         category === 'rectangle' ? 'Ուղղանկյուն — աթոռները երկու կողմից' :
         category === 'double_rectangle' ? 'Կրկնակի — երկու կողմից, ավելի երկար' :
         'Պրեզիդիում — լայն, հյուրերի ի պատիվ';
+    // Reset side buttons
+    selectNewTableSide('mutual');
     openModal('addTableModal');
     setTimeout(() => document.getElementById('newTableNumber').focus(), 100);
 }
@@ -480,7 +578,7 @@ async function confirmAddTable() {
     const res = await apiFetch(`/api/v1/tables/?wedding_id=${weddingId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wedding_id: weddingId, table_number: num, category: pendingNewCategory, capacity: pendingNewCapacity })
+        body: JSON.stringify({ wedding_id: weddingId, table_number: num, category: pendingNewCategory, capacity: pendingNewCapacity, side: pendingNewSide })
     });
     if (res.ok) { closeModal('addTableModal'); loadTables(); }
 }
@@ -500,7 +598,19 @@ async function loadTables() {
     }
 
     wrapper.innerHTML = '';
-    tables.forEach((table, index) => wrapper.appendChild(buildTableElement(table, allMembers, index)));
+    tables.forEach((table, index) => {
+        // Sync DB positions into our in-memory map (only if not already overridden by drag)
+        if (tablePositions[table.id] === undefined) {
+            tablePositions[table.id] = {
+                x: table.x_pos !== null && table.x_pos !== undefined ? table.x_pos : 60 + (index % 3) * 300,
+                y: table.y_pos !== null && table.y_pos !== undefined ? table.y_pos : 80 + Math.floor(index / 3) * 230,
+            };
+        }
+        wrapper.appendChild(buildTableElement(table, allMembers, index));
+    });
+
+    // Re-apply hall filter after reload
+    filterHall(currentHallFilter);
 }
 
 function getTableDimensions(category, capacity = 10) {
@@ -528,37 +638,39 @@ function getTableDimensions(category, capacity = 10) {
 
 function buildTableElement(table, allMembers, index) {
     const dim = getTableDimensions(table.category, table.capacity);
-
     const tDiv = document.createElement('div');
     tDiv.className = 'movable-table';
     tDiv.setAttribute('data-table-id', table.id);
+    tDiv.setAttribute('data-side', table.side || 'mutual');
 
-    const savedPos = tablePositions[table.id];
-    const x = savedPos ? savedPos.x : 60 + (index % 3) * 300;
-    const y = savedPos ? savedPos.y : 80 + Math.floor(index / 3) * 230;
-    tDiv.style.left = x + 'px';
-    tDiv.style.top  = y + 'px';
+    const pos = tablePositions[table.id];
+    tDiv.style.left = pos.x + 'px';
+    tDiv.style.top  = pos.y + 'px';
     tDiv.style.width  = dim.w + 'px';
     tDiv.style.height = dim.h + 'px';
 
     if (tableRotations[table.id] === undefined) tableRotations[table.id] = 0;
     tDiv.style.transform = `rotate(${tableRotations[table.id]}deg)`;
 
+    // Side accent color for border
+    const sideBorderColor = { bride: '#c4736a', groom: '#7a9e7e', mutual: '#cfc4b4' }[table.side || 'mutual'];
+    const sideBadge = { bride: '👰', groom: '🤵', mutual: '🤝' }[table.side || 'mutual'];
+
     const body = document.createElement('div');
     body.className = 'table-inner';
     body.style.cssText = [
         'position:relative', 'width:100%', 'height:100%',
-        'background:#e8e0d4', 'border:2px solid #cfc4b4',
+        `background:#e8e0d4`, `border:2px solid ${sideBorderColor}`,
         'display:flex', 'align-items:center', 'justify-content:center', 'flex-direction:column',
         table.category === 'round' ? 'border-radius:50%' :
-        table.category === 'presidium' ? 'border-radius:8px;background:#ddd5c4;border-color:#c4b89e' :
+        table.category === 'presidium' ? 'border-radius:8px;background:#ddd5c4' :
         'border-radius:10px'
     ].join(';');
 
     body.innerHTML = `
         <div style="text-align:center;pointer-events:none;z-index:2;">
             <div style="font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:700;color:#1a1612;line-height:1.1;">Սեղ. ${table.table_number}</div>
-            <div style="font-size:10px;color:#8c7b66;margin-top:2px;">${table.capacity} տեղ</div>
+            <div style="font-size:10px;color:#8c7b66;margin-top:2px;">${table.capacity} տեղ ${sideBadge}</div>
         </div>
     `;
 
@@ -570,10 +682,10 @@ function buildTableElement(table, allMembers, index) {
             style="width:28px;height:24px;padding:0;" title="Պտտել ձախ">↩️</button>
         <button onclick="event.stopPropagation();openTableSheet(${table.id})"
             class="bg-white border border-[#e8ddd0] hover:border-[#c9a96e] rounded-md text-[10px] font-medium text-[#5c4f3d] shadow-sm cursor-pointer transition-all duration-150 flex items-center justify-center gap-1"
-            style="width:76px;height:24px;padding:0;">📋 Թերթիկ</button>
+            style="width:76px;height:24px;padding:0;">📋 Թերթ.</button>
         <button onclick="event.stopPropagation();editTableCapacity(${table.id},${table.capacity})"
             class="bg-white border border-[#e8ddd0] hover:border-[#c9a96e] rounded-md text-[10px] font-medium text-[#5c4f3d] shadow-sm cursor-pointer transition-all duration-150 flex items-center justify-center gap-1"
-            style="width:64px;height:24px;padding:0;">✏️ Աթոռ</button>
+            style="width:60px;height:24px;padding:0;">✏️ Աթ.</button>
         <button onclick="event.stopPropagation();rotateTable(${table.id}, 45)"
             class="bg-white border border-[#e8ddd0] hover:border-[#c9a96e] rounded-md text-[10px] font-medium text-[#5c4f3d] shadow-sm cursor-pointer transition-all duration-150 flex items-center justify-center"
             style="width:28px;height:24px;padding:0;" title="Պտտել աջ">↪️</button>
@@ -591,7 +703,6 @@ function buildTableElement(table, allMembers, index) {
     for (let i = 0; i < table.capacity; i++) {
         const chair = document.createElement('div');
         chair.className = 'chair';
-
         let member = seatedHere.find(m => m.seat_index === i);
         if (!member && autoMembers.length > 0) member = autoMembers.shift();
 
@@ -608,16 +719,10 @@ function buildTableElement(table, allMembers, index) {
 
         chair.addEventListener('dragover', (e) => {
             e.preventDefault(); e.stopPropagation();
-            if (!chair.classList.contains('occupied')) {
-                chair.style.borderColor = '#c9a96e';
-                chair.style.background = 'rgba(201,169,110,0.2)';
-            }
+            if (!chair.classList.contains('occupied')) { chair.style.borderColor = '#c9a96e'; chair.style.background = 'rgba(201,169,110,0.2)'; }
         });
         chair.addEventListener('dragleave', () => {
-            if (!chair.classList.contains('occupied')) {
-                chair.style.borderColor = '';
-                chair.style.background = '';
-            }
+            if (!chair.classList.contains('occupied')) { chair.style.borderColor = ''; chair.style.background = ''; }
         });
         chair.addEventListener('drop', async (e) => {
             e.preventDefault(); e.stopPropagation();
@@ -627,9 +732,9 @@ function buildTableElement(table, allMembers, index) {
             if (memberId) await seatMemberOnChair(parseInt(memberId), table.id, i);
         });
 
-        const pos = getChairPosition(table.category, i, table.capacity, dim);
-        chair.style.left = pos.x + 'px';
-        chair.style.top  = pos.y + 'px';
+        const p = getChairPosition(table.category, i, table.capacity, dim);
+        chair.style.left = p.x + 'px';
+        chair.style.top  = p.y + 'px';
         chair.style.transform = `translate(-50%, -50%) rotate(${-tableRotations[table.id]}deg)`;
         body.appendChild(chair);
     }
@@ -662,23 +767,53 @@ function rotateTable(tableId, degrees) {
     const tableEl = document.querySelector(`[data-table-id="${tableId}"]`);
     if (tableEl) {
         tableEl.style.transform = `rotate(${tableRotations[tableId]}deg)`;
-        tableEl.querySelectorAll('.chair').forEach(chair => {
-            chair.style.transform = `translate(-50%, -50%) rotate(${-tableRotations[tableId]}deg)`;
+        tableEl.querySelectorAll('.chair').forEach(c => {
+            c.style.transform = `translate(-50%, -50%) rotate(${-tableRotations[tableId]}deg)`;
         });
     }
 }
+
+document.addEventListener('mousemove', (e) => {
+    if (activeMovingTable) {
+        const wrapRect = document.getElementById('zoomWrapper').getBoundingClientRect();
+        let x = (e.clientX - wrapRect.left) / zoomScale - dragOffset.x;
+        let y = (e.clientY - wrapRect.top)  / zoomScale - dragOffset.y;
+        activeMovingTable.style.left = x + 'px';
+        activeMovingTable.style.top  = y + 'px';
+        const tableId = parseInt(activeMovingTable.getAttribute('data-table-id'));
+        activeMovingTable.style.transform = `rotate(${tableRotations[tableId] || 0}deg)`;
+        tablePositions[tableId] = { x, y };
+        return;
+    }
+    if (isPanning) {
+        panOffset.x = e.clientX - panStart.x;
+        panOffset.y = e.clientY - panStart.y;
+        updateCanvasTransform();
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    if (activeMovingTable) {
+        activeMovingTable.classList.remove('dragging');
+        const tableId = parseInt(activeMovingTable.getAttribute('data-table-id'));
+        const pos = tablePositions[tableId];
+        if (pos) scheduleSave(tableId);  // Auto-save after drag
+        activeMovingTable = null;
+    }
+    if (isPanning) {
+        isPanning = false;
+        const container = document.getElementById('hallContainer');
+        if (container) container.style.cursor = 'auto';
+    }
+});
 
 async function seatMemberOnChair(memberId, tableId, seatIndex) {
     const res = await apiFetch(
         `/api/v1/guest-members/${memberId}/seat?wedding_id=${weddingId}&table_id=${tableId}&seat_index=${seatIndex}`,
         { method: 'PUT' }
     );
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.detail || 'Ազատ տեղ չկա կամ սխալ կատարվեց');
-    } else {
-        loadTables(); loadUnseated(); loadGuests();
-    }
+    if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.detail || 'Ազատ տեղ չկա կամ սխալ կատարվեց'); }
+    else { loadTables(); loadUnseated(); loadGuests(); }
 }
 
 function openGuestPickerForSeat(tableId, seatIndex) {
@@ -686,31 +821,23 @@ function openGuestPickerForSeat(tableId, seatIndex) {
     pendingSeatIndex = seatIndex;
     const list = document.getElementById('guestPickerList');
     list.innerHTML = '';
-
     if (globalUnseatedMembers.length === 0) {
         list.innerHTML = '<p class="text-center text-[#8c7b66] text-sm italic py-6">Չնստեցված հյուրեր չկան 🎉</p>';
-        openModal('guestPickerModal');
-        return;
+        openModal('guestPickerModal'); return;
     }
-
     const unseatedIds = new Set(globalUnseatedMembers.map(m => m.id.toString()));
     globalAllGuests.forEach(guest => {
         const guestUnseated = guest.members.filter(m => unseatedIds.has(m.id.toString()));
         if (guestUnseated.length === 0) return;
-
         const groupHeader = document.createElement('div');
         groupHeader.className = "text-[11px] font-bold text-[#8c7b66] uppercase tracking-wider mt-3 mb-1 px-1";
         groupHeader.innerText = guest.display_name;
         list.appendChild(groupHeader);
-
         guestUnseated.forEach(m => {
             const btn = document.createElement('button');
             btn.className = 'w-full text-left px-3 py-2 rounded-lg border border-[#e8ddd0] bg-white text-xs font-medium text-[#1a1612] flex justify-between items-center hover:border-[#c9a96e] hover:bg-[#c9a96e]/5 transition-all mb-1';
             btn.innerHTML = `<span>👤 ${m.first_name || 'Անանուն հյուր'}</span><span class="text-[#c9a96e] font-bold text-sm">+</span>`;
-            btn.addEventListener('click', async () => {
-                await seatMemberOnChair(m.id, tableId, seatIndex);
-                closeModal('guestPickerModal');
-            });
+            btn.addEventListener('click', async () => { await seatMemberOnChair(m.id, tableId, seatIndex); closeModal('guestPickerModal'); });
             list.appendChild(btn);
         });
     });
@@ -733,40 +860,13 @@ function getChairPosition(category, i, total, dim) {
     return { x: spacing * (i - half + 1), y: h + 16 };
 }
 
-document.addEventListener('mousemove', (e) => {
-    if (activeMovingTable) {
-        const wrapRect = document.getElementById('zoomWrapper').getBoundingClientRect();
-        let x = (e.clientX - wrapRect.left) / zoomScale - dragOffset.x;
-        let y = (e.clientY - wrapRect.top)  / zoomScale - dragOffset.y;
-        activeMovingTable.style.left = x + 'px';
-        activeMovingTable.style.top  = y + 'px';
-        const tableId = activeMovingTable.getAttribute('data-table-id');
-        activeMovingTable.style.transform = `rotate(${tableRotations[tableId] || 0}deg)`;
-        tablePositions[tableId] = { x, y };
-        return;
-    }
-    if (isPanning) {
-        panOffset.x = e.clientX - panStart.x;
-        panOffset.y = e.clientY - panStart.y;
-        updateCanvasTransform();
-    }
-});
-
-document.addEventListener('mouseup', () => {
-    if (activeMovingTable) { activeMovingTable.classList.remove('dragging'); activeMovingTable = null; }
-    if (isPanning) {
-        isPanning = false;
-        const container = document.getElementById('hallContainer');
-        if (container) container.style.cursor = 'auto';
-    }
-});
-
 // ── DELETE TABLE ──
 function deleteTable(id) {
     document.getElementById('confirmDeleteText').innerText = "Ցանկանո՞ւմ եք ջնջել այս սեղանը։ Բոլոր նստած հյուրերը կազատվեն։";
     openModal('confirmDeleteModal');
     document.getElementById('executeDeleteBtn').onclick = async () => {
         await apiFetch(`/api/v1/tables/${id}?wedding_id=${weddingId}`, { method: 'DELETE' });
+        delete tablePositions[id];
         closeModal('confirmDeleteModal');
         loadTables(); loadUnseated();
     };
@@ -775,7 +875,6 @@ function deleteTable(id) {
 // ── EDIT CAPACITY ──
 let pendingEditTableId = null;
 let pendingEditCapacityVal = 10;
-
 function editTableCapacity(tableId, current) {
     pendingEditTableId = tableId;
     pendingEditCapacityVal = current;
@@ -802,17 +901,15 @@ async function openTableSheet(tableId) {
         apiFetch(`/api/v1/tables/wedding/${weddingId}`)
     ]);
     if (!guestsRes.ok || !tableRes.ok) return;
-
     const guests = await guestsRes.json();
     const tables = await tableRes.json();
     const table  = tables.find(t => t.id === tableId);
     if (!table) return;
-
     const allMembers = [];
     guests.forEach(g => g.members.forEach(m => allMembers.push({ ...m, guestName: g.display_name })));
     const seatedHere = allMembers.filter(m => m.table_id === tableId);
 
-    document.getElementById('tableSheetTitle').innerText = `Սեղան ${table.table_number} — Թերթիկ 📋`;
+    document.getElementById('tableSheetTitle').innerText = `Սեղ. ${table.table_number} — Թերթ. 📋`;
     const body = document.getElementById('tableSheetBody');
     body.innerHTML = '';
 
@@ -821,13 +918,13 @@ async function openTableSheet(tableId) {
     summary.innerHTML = `<span>${catLabel[table.category]} — ${table.capacity} տեղ</span><span>${seatedHere.length} / ${table.capacity} զբաղ.</span>`;
     body.appendChild(summary);
 
-    seatedHere.forEach((m) => {
-        const seatNumber = (m.seat_index != null) ? (m.seat_index + 1) : '-';
+    seatedHere.forEach(m => {
+        const seatNumber = m.seat_index != null ? m.seat_index + 1 : '-';
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;margin-bottom:6px;padding:6px 8px;background:rgba(0,0,0,0.02);border-radius:6px;';
         row.innerHTML = `
             <div style="font-weight:bold;color:#c9a96e;width:24px;font-size:11px;">#${seatNumber}</div>
-            <div style="flex:1;font-size:12px;font-weight:500;">👤 ${m.first_name || 'Անանուն հյուր'}</div>
+            <div style="flex:1;font-size:12px;font-weight:500;">👤 ${m.first_name || 'Անանուն'}</div>
             <div style="display:flex;gap:4px;">
                 <button style="background:none;border:none;cursor:pointer;padding:2px 6px;" onclick="sheetRename(${m.id}, '${(m.first_name||'').replace(/'/g,"\\'")}')">✏️</button>
                 <button style="background:none;border:none;cursor:pointer;padding:2px 6px;color:#c4736a;" onclick="sheetRemove(${m.id})">✕</button>
@@ -853,7 +950,7 @@ async function openTableSheet(tableId) {
                     <div style="width:18px;height:18px;border-radius:50%;border:1px dashed #c9a96e;display:flex;align-items:center;justify-content:center;font-size:9px;color:#c9a96e;">🪑</div>
                     <div style="font-size:11.5px;color:#8c7b66;font-style:italic;">Դատարկ աթոռ</div>
                 </div>
-                <div style="font-size:11px;color:#c9a96e;font-weight:bold;">Ընտրել հյուր →</div>
+                <div style="font-size:11px;color:#c9a96e;font-weight:bold;">Ընտրել →</div>
             `;
             body.appendChild(row);
         }
@@ -873,11 +970,7 @@ function sheetRename(id, oldName) {
             `/api/v1/guest-members/${id}/name?wedding_id=${weddingId}&first_name=${encodeURIComponent(newName)}`,
             { method: 'PUT' }
         );
-        if (res.ok) {
-            closeModal('renameMemberModal');
-            closeModal('tableSheetModal');
-            loadTables(); loadGuests(); loadUnseated();
-        }
+        if (res.ok) { closeModal('renameMemberModal'); closeModal('tableSheetModal'); loadTables(); loadGuests(); loadUnseated(); }
     };
 }
 
@@ -886,8 +979,7 @@ function sheetRemove(memberId) {
     openModal('confirmDeleteModal');
     document.getElementById('executeDeleteBtn').onclick = async () => {
         await apiFetch(`/api/v1/guest-members/${memberId}/seat?wedding_id=${weddingId}`, { method: 'PUT' });
-        closeModal('confirmDeleteModal');
-        closeModal('tableSheetModal');
+        closeModal('confirmDeleteModal'); closeModal('tableSheetModal');
         loadTables(); loadUnseated();
     };
 }
@@ -896,56 +988,41 @@ function openGuestPicker(tableId) {
     pendingSeatTableId = tableId;
     const list = document.getElementById('guestPickerList');
     list.innerHTML = '';
-
     if (globalUnseatedMembers.length === 0) {
-        list.innerHTML = '<p class="text-center text-[#8c7b66] text-sm italic py-6">Չնստեցված հյուրեր չկան 🎉</p>';
+        list.innerHTML = '<p class="text-center text-[#8c7b66] text-sm italic py-6">Չնստ. հյուրեր չկան 🎉</p>';
         openModal('guestPickerModal'); return;
     }
-
     const unseatedIds = new Set(globalUnseatedMembers.map(m => m.id.toString()));
-    let hasVisibleGroups = false;
-
+    let hasGroups = false;
     globalAllGuests.forEach(guest => {
         const guestUnseated = guest.members.filter(m => unseatedIds.has(m.id.toString()));
         if (guestUnseated.length === 0) return;
-        hasVisibleGroups = true;
-
-        const groupHeader = document.createElement('div');
-        groupHeader.className = "text-[11px] font-bold text-[#8c7b66] uppercase tracking-wider mt-3 mb-1 px-1";
-        groupHeader.innerText = guest.display_name;
-        list.appendChild(groupHeader);
-
+        hasGroups = true;
+        const hdr = document.createElement('div');
+        hdr.className = "text-[11px] font-bold text-[#8c7b66] uppercase tracking-wider mt-3 mb-1 px-1";
+        hdr.innerText = guest.display_name;
+        list.appendChild(hdr);
         guestUnseated.forEach(m => {
             const btn = document.createElement('button');
             btn.className = 'w-full text-left px-3 py-2 rounded-lg border border-[#e8ddd0] bg-white text-xs font-medium text-[#1a1612] flex justify-between items-center hover:border-[#c9a96e] hover:bg-[#c9a96e]/5 transition-all mb-1';
-            btn.innerHTML = `<span>👤 ${m.first_name || 'Անանուն հյուր'}</span><span class="text-[#c9a96e] font-bold text-sm">+</span>`;
-            btn.addEventListener('click', async () => {
-                await seatMemberOnTable(m.id, tableId);
-                closeModal('guestPickerModal');
-            });
+            btn.innerHTML = `<span>👤 ${m.first_name || 'Անանուն'}</span><span class="text-[#c9a96e] font-bold text-sm">+</span>`;
+            btn.addEventListener('click', async () => { await seatMemberOnTable(m.id, tableId); closeModal('guestPickerModal'); });
             list.appendChild(btn);
         });
     });
-
-    if (!hasVisibleGroups) {
-        list.innerHTML = '<p class="text-center text-[#8c7b66] text-sm italic py-6">Չնստեցված հյուրեր չկան 🎉</p>';
-    }
+    if (!hasGroups) list.innerHTML = '<p class="text-center text-[#8c7b66] text-sm italic py-6">Չնստ. հյուրեր չկան 🎉</p>';
     openModal('guestPickerModal');
 }
 
 async function seatMemberOnTable(memberId, tableId) {
     const seatIndex = await findNextFreeSeat(tableId);
-    if (seatIndex === null) { alert('Ազատ տեղ չկա այս սեղանի մոտ։'); return; }
+    if (seatIndex === null) { alert('Ազատ տեղ չկա։'); return; }
     const res = await apiFetch(
         `/api/v1/guest-members/${memberId}/seat?wedding_id=${weddingId}&table_id=${tableId}&seat_index=${seatIndex}`,
         { method: 'PUT' }
     );
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.detail || 'Ազատ տեղ չկա կամ սխալ կատարվեց');
-    } else {
-        loadTables(); loadUnseated(); loadGuests();
-    }
+    if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.detail || 'Սխալ'); }
+    else { loadTables(); loadUnseated(); loadGuests(); }
 }
 
 async function findNextFreeSeat(tableId) {
@@ -954,38 +1031,30 @@ async function findNextFreeSeat(tableId) {
     const tables = await tableRes.json();
     const table  = tables.find(t => t.id === tableId);
     if (!table) return null;
-
     const membersRes = await apiFetch(`/api/v1/guest-members/wedding/${weddingId}`);
     if (!membersRes.ok) return null;
     const allMembers = await membersRes.json();
-    const occupiedSeats = new Set(
-        allMembers.filter(m => m.table_id === tableId && m.seat_index != null).map(m => m.seat_index)
-    );
-    for (let i = 0; i < table.capacity; i++) {
-        if (!occupiedSeats.has(i)) return i;
-    }
+    const occupiedSeats = new Set(allMembers.filter(m => m.table_id === tableId && m.seat_index != null).map(m => m.seat_index));
+    for (let i = 0; i < table.capacity; i++) { if (!occupiedSeats.has(i)) return i; }
     return null;
 }
 
 function manageSeatedMember(member) {
     document.getElementById('chairActionsTitle').innerText = member.first_name || 'Անանուն հյուր';
-    document.getElementById('chairActionRenameBtn').onclick = () => {
-        closeModal('chairActionsModal');
-        sheetRename(member.id, member.first_name || '');
-    };
+    document.getElementById('chairActionRenameBtn').onclick = () => { closeModal('chairActionsModal'); sheetRename(member.id, member.first_name || ''); };
     document.getElementById('chairActionUnseatBtn').onclick = () => {
         closeModal('chairActionsModal');
-        document.getElementById('confirmDeleteText').innerText = `«${member.first_name || 'Անանուն'}» — հեռացնե՞լ սեղանից։`;
+        document.getElementById('confirmDeleteText').innerText = `«${member.first_name || 'Անանուն'}» — հեռ.?`;
         openModal('confirmDeleteModal');
         document.getElementById('executeDeleteBtn').onclick = async () => {
             await apiFetch(`/api/v1/guest-members/${member.id}/seat?wedding_id=${weddingId}`, { method: 'PUT' });
-            closeModal('confirmDeleteModal');
-            loadTables(); loadUnseated();
+            closeModal('confirmDeleteModal'); loadTables(); loadUnseated();
         };
     };
     openModal('chairActionsModal');
 }
 
+// ── GUESTS ──
 async function loadGuests() {
     const res = await apiFetch(`/api/v1/guests/wedding/${weddingId}`);
     if (!res.ok) { document.getElementById('guestsContainer').innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Սխալ</p>'; return; }
@@ -997,7 +1066,7 @@ function renderGuestsList() {
     const container = document.getElementById('guestsContainer');
     if (!container) return;
     if (globalAllGuests.length === 0) {
-        container.innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Ավելացրեք հյուրեր ↑</p>';
+        container.innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Ավ. հյուրեր ↑</p>';
         return;
     }
     container.innerHTML = '';
@@ -1011,7 +1080,7 @@ function renderGuestsList() {
         header.className = 'flex items-center gap-1.5 px-2.5 py-2';
         header.innerHTML = `
             <input type="checkbox" value="${guest.id}" onchange="toggleGuestSelect(this)" class="flex-shrink-0 accent-[#c4736a]">
-            <span class="text-xs font-semibold text-[#1a1612] flex-1 truncate" title="${guest.display_name}">${guest.display_name}</span>
+            <span class="text-xs font-semibold text-[#1a1612] flex-1 truncate">${guest.display_name}</span>
             <span class="text-[9px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${sideCls}">${sideIcon}</span>
             <span class="text-[10px] bg-[#f7f3ee] border border-[#e8ddd0] text-[#5c4f3d] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">${guest.total_count}</span>
             <button onclick="deleteGuest(${guest.id})" class="text-[#8c7b66] hover:text-[#c4736a] text-xs px-1 transition-colors flex-shrink-0">🗑</button>
@@ -1025,7 +1094,7 @@ function renderGuestsList() {
                 row.className = 'flex items-center justify-between px-6 py-1 text-[11px] text-[#5c4f3d] border-b border-[#f7f3ee] last:border-0 hover:bg-[#f7f3ee] transition-colors';
                 row.innerHTML = `
                     <span class="flex-1">${m.first_name || '(Անանուն)'}</span>
-                    ${m.table_id ? '<span class="text-[9px] bg-[#7a9e7e]/10 text-[#7a9e7e] px-1.5 py-0.5 rounded-full">✓ Նստ.</span>' : ''}
+                    ${m.table_id ? '<span class="text-[9px] bg-[#7a9e7e]/10 text-[#7a9e7e] px-1.5 py-0.5 rounded-full">✓</span>' : ''}
                     <button onclick="quickRenameMember(${m.id},'${(m.first_name||'').replace(/'/g,"\\'")}')" class="text-[#8c7b66] hover:text-[#1a1612] ml-1 transition-colors">✏</button>
                 `;
                 membersDiv.appendChild(row);
@@ -1034,7 +1103,7 @@ function renderGuestsList() {
         }
         container.appendChild(card);
     });
-    if (container.innerHTML === '') container.innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Այս կողմից հյուրեր չկան 🍃</p>';
+    if (container.innerHTML === '') container.innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Կողմից հյ. չկան 🍃</p>';
 }
 
 async function addGuest() {
@@ -1047,20 +1116,16 @@ async function addGuest() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wedding_id: weddingId, display_name: name, total_count: count, side, status: 'confirmed' })
     });
-    if (res.ok) {
-        document.getElementById('guestName').value = '';
-        document.getElementById('guestCount').value = 1;
-        loadGuests(); loadUnseated();
-    }
+    if (res.ok) { document.getElementById('guestName').value = ''; document.getElementById('guestCount').value = 1; loadGuests(); loadUnseated(); }
 }
 
 function deleteGuest(id) {
-    document.getElementById('confirmDeleteText').innerText = "Ցանկանո՞ւմ եք ջնջել այս հրավերը և հեռացնել բոլոր անդամներին։";
+    document.getElementById('confirmDeleteText').innerText = "Ջնջե՞լ հրավերն ու բոլոր անդամներին։";
     openModal('confirmDeleteModal');
     document.getElementById('executeDeleteBtn').onclick = async () => {
         const res = await apiFetch(`/api/v1/guests/${id}?wedding_id=${weddingId}`, { method: 'DELETE' });
         if (res.ok) { closeModal('confirmDeleteModal'); loadGuests(); loadUnseated(); loadTables(); }
-        else alert('Չհաջողվեց ջնջել հրավերը');
+        else alert('Չհաջ. ջնջել');
     };
 }
 
@@ -1088,20 +1153,17 @@ function toggleGuestSelect(cb) {
 }
 
 async function mergeSelectedGuests() {
-    const name = prompt('Նոր ընդհանուր անուն (օր.՝ Մարգարյան ընտանիք):');
+    const name = prompt('Նոր ընդ. անուն (օր.՝ Մարգ. ընտ.):');
     if (!name) return;
     const res = await apiFetch(`/api/v1/guests/wedding/${weddingId}/merge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guest_ids: selectedGuestIds, new_display_name: name })
     });
-    if (res.ok) {
-        selectedGuestIds = [];
-        document.getElementById('mergeBar').classList.add('hidden');
-        loadGuests(); loadUnseated(); loadTables();
-    }
+    if (res.ok) { selectedGuestIds = []; document.getElementById('mergeBar').classList.add('hidden'); loadGuests(); loadUnseated(); loadTables(); }
 }
 
+// ── UNSEATED ──
 async function loadUnseated() {
     const [gR, uR] = await Promise.all([
         apiFetch(`/api/v1/guests/wedding/${weddingId}`),
@@ -1109,79 +1171,66 @@ async function loadUnseated() {
     ]);
     const container = document.getElementById('unseatedContainer');
     if (!gR.ok || !uR.ok) { container.innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Սխալ</p>'; return; }
-    globalAllGuests        = await gR.json();
-    globalUnseatedMembers  = await uR.json();
+    globalAllGuests       = await gR.json();
+    globalUnseatedMembers = await uR.json();
     renderUnseatedList();
 }
 
 function renderUnseatedList() {
     const container = document.getElementById('unseatedContainer');
     if (!container) return;
-
     const unseatedIds  = new Set(globalUnseatedMembers.map(m => m.id));
     const totalMembers = globalAllGuests.reduce((s, g) => s + g.total_count, 0);
-    document.getElementById('unseatedSummary').innerText = `${totalMembers - globalUnseatedMembers.length} / ${totalMembers} հոգի նստեցված`;
+    document.getElementById('unseatedSummary').innerText = `${totalMembers - globalUnseatedMembers.length} / ${totalMembers} նստ.`;
 
     if (globalAllGuests.length === 0) {
-        container.innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Ավելացրեք հյուրեր ←</p>';
+        container.innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Ավ. հյուրեր ←</p>';
         return;
     }
-
     const fragment = document.createDocumentFragment();
-    let hasVisibleGuests = false;
+    let hasVisible = false;
 
     globalAllGuests.forEach(guest => {
         if (typeof currentUnseatedFilter !== 'undefined' && currentUnseatedFilter !== 'all' && guest.side !== currentUnseatedFilter) return;
-        hasVisibleGuests = true;
-
+        hasVisible = true;
         const guestUnseated = guest.members.filter(m => unseatedIds.has(m.id));
-        const total       = guest.members.length;
-        const unseatCount = guestUnseated.length;
-        const pillCls  = unseatCount === 0 ? 'bg-[#7a9e7e]/10 text-[#7a9e7e]' :
-                         unseatCount === total ? 'bg-[#c4736a]/10 text-[#c4736a]' : 'bg-[#c9a96e]/15 text-[#8a6c30]';
-        const pillText = unseatCount === 0 ? '✓ Բոլոր' : unseatCount === total ? `${unseatCount} չնստ.` : `${unseatCount}/${total}`;
+        const total = guest.members.length;
+        const uc    = guestUnseated.length;
+        const pillCls  = uc === 0 ? 'bg-[#7a9e7e]/10 text-[#7a9e7e]' : uc === total ? 'bg-[#c4736a]/10 text-[#c4736a]' : 'bg-[#c9a96e]/15 text-[#8a6c30]';
+        const pillText = uc === 0 ? '✓ Բոլ.' : uc === total ? `${uc} Չ.Ն.` : `${uc}/${total}`;
 
         const card = document.createElement('div');
         card.className = 'bg-white rounded-xl border border-[#e8ddd0] mb-2 overflow-hidden hover:shadow-sm transition-shadow';
-
         const header = document.createElement('div');
         header.className = 'flex items-center gap-2 px-3 py-2.5 cursor-pointer';
         header.innerHTML = `
             <span class="text-xs font-semibold text-[#1a1612] flex-1 truncate">${guest.display_name}</span>
             <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${pillCls}">${pillText}</span>
-            <button onclick="event.stopPropagation();openSeatCountModal(${guest.id})" ${unseatCount === 0 ? 'disabled' : ''}
-                class="flex-shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md transition-colors ${unseatCount === 0 ? 'opacity-30 cursor-not-allowed bg-[#f7f3ee] text-[#8c7b66]' : 'bg-[#1a1612] text-[#e8d5b0] hover:bg-[#3d3228]'}">
+            <button onclick="event.stopPropagation();openSeatCountModal(${guest.id})" ${uc === 0 ? 'disabled' : ''}
+                class="flex-shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md transition-colors ${uc === 0 ? 'opacity-30 cursor-not-allowed bg-[#f7f3ee] text-[#8c7b66]' : 'bg-[#1a1612] text-[#e8d5b0] hover:bg-[#3d3228]'}">
                 Նստ. ➔
             </button>
         `;
-
         const expandDiv = document.createElement('div');
         expandDiv.className = typeof openedGroupIds !== 'undefined' && openedGroupIds.has(guest.id)
-            ? 'border-t border-[#f7f3ee]'
-            : 'border-t border-[#f7f3ee] hidden';
+            ? 'border-t border-[#f7f3ee]' : 'border-t border-[#f7f3ee] hidden';
 
         guest.members.forEach(m => {
             const isSeated = !unseatedIds.has(m.id);
             const row = document.createElement('div');
             row.className = 'flex items-center gap-2 px-4 py-1.5 text-[11px] border-b border-[#f7f3ee] last:border-0 hover:bg-[#f7f3ee] transition-colors';
-
             if (!isSeated) {
                 row.setAttribute('draggable', 'true');
                 row.style.cursor = 'grab';
                 row.addEventListener('dragstart', (e) => {
                     e.dataTransfer.setData('text/plain', m.id);
                     e.dataTransfer.effectAllowed = 'move';
-                    document.body.classList.add('is-dragging-guest');
                     setTimeout(() => row.style.opacity = '0.5', 0);
                 });
-                row.addEventListener('dragend', () => {
-                    row.style.opacity = '1';
-                    document.body.classList.remove('is-dragging-guest');
-                });
+                row.addEventListener('dragend', () => { row.style.opacity = '1'; });
             }
-
             row.innerHTML = `
-                <span class="flex-1 ${isSeated ? 'text-[#7a9e7e]' : 'text-[#5c4f3d]'}">${m.first_name || 'Անանուն հյուր'}</span>
+                <span class="flex-1 ${isSeated ? 'text-[#7a9e7e]' : 'text-[#5c4f3d]'}">${m.first_name || 'Անանուն'}</span>
                 ${isSeated
                     ? `<span class="text-[9px] bg-[#7a9e7e]/10 text-[#7a9e7e] px-1.5 py-0.5 rounded-full">Սեղ.${m.table_id}</span>
                        <button onclick="unseatMember(${m.id})" class="text-[#8c7b66] hover:text-[#c4736a] text-[10px] transition-colors">✕</button>`
@@ -1199,18 +1248,14 @@ function renderUnseatedList() {
                 else openedGroupIds.delete(guest.id);
             }
         });
-
         card.appendChild(header);
         card.appendChild(expandDiv);
         fragment.appendChild(card);
     });
 
     container.innerHTML = '';
-    if (!hasVisibleGuests) {
-        container.innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Այս կողմից չնստեցված հյուրեր չկան 🍃</p>';
-    } else {
-        container.appendChild(fragment);
-    }
+    if (!hasVisible) container.innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Կողմից Չ.Ն. չկան 🍃</p>';
+    else container.appendChild(fragment);
 }
 
 async function unseatMember(memberId) {
@@ -1223,14 +1268,13 @@ function openSeatCountModal(guestId) {
     if (!guest) return;
     const unseatedIds   = new Set(globalUnseatedMembers.map(m => m.id));
     const guestUnseated = guest.members.filter(m => unseatedIds.has(m.id));
-    if (guestUnseated.length === 0) { alert('Բոլոր անդամները արդեն նստեցված են։'); return; }
-
+    if (guestUnseated.length === 0) { alert('Բոլ. արդ. նստ.'); return; }
     pendingSeatGuest = { guestId, display_name: guest.display_name, unseatedMembers: guestUnseated };
     pendingSeatCount = guestUnseated.length;
     document.getElementById('seatCountTitle').innerText   = guest.display_name;
     document.getElementById('seatCountDisplay').innerText = pendingSeatCount;
-    document.getElementById('seatCountMax').innerText     = `Ընդամենը ${guestUnseated.length} հոգի սպասում է`;
-    document.getElementById('seatCountHint').innerText    = `Ընտրեք՝ քանիսին այս անգամ նստեցնել։`;
+    document.getElementById('seatCountMax').innerText     = `${guestUnseated.length} հոգի սպ.`;
+    document.getElementById('seatCountHint').innerText    = 'Ընտրեք՝ քանիսին նստ.';
     openModal('seatCountModal');
 }
 function changeSeatCount(delta) {
@@ -1254,34 +1298,34 @@ async function openTablePicker(guestInfo, count) {
     let allMembers = [];
     if (gR.ok) { const gs = await gR.json(); gs.forEach(g => g.members.forEach(m => allMembers.push(m))); }
 
-    document.getElementById('tablePickerTitle').innerText = `${count} հոգու համար`;
+    document.getElementById('tablePickerTitle').innerText = `${count} հոգ. համ.`;
     const list = document.getElementById('tablePickerList');
     list.innerHTML = '';
 
     if (tables.length === 0) {
-        list.innerHTML = '<p class="text-center text-[#8c7b66] text-sm italic py-6">Սրահում սեղաններ չկան</p>';
+        list.innerHTML = '<p class="text-center text-[#8c7b66] text-sm italic py-6">Սեղ. չկան</p>';
         openModal('tablePickerModal'); return;
     }
-
     tables.forEach(table => {
-        const seated    = allMembers.filter(m => m.table_id === table.id).length;
-        const available = table.capacity - seated;
-        const canFit    = available >= count;
-        const pct       = Math.round((seated / table.capacity) * 100);
+        const seated  = allMembers.filter(m => m.table_id === table.id).length;
+        const avail   = table.capacity - seated;
+        const canFit  = avail >= count;
+        const pct     = Math.round((seated / table.capacity) * 100);
+        const sideBadge = { bride:'👰', groom:'🤵', mutual:'🤝' }[table.side||'mutual'];
 
         const btn = document.createElement('button');
         btn.disabled = !canFit;
         btn.className = `w-full text-left px-3 py-2.5 rounded-xl border transition-all ${canFit ? 'border-[#e8ddd0] bg-white hover:border-[#c9a96e] hover:bg-[#c9a96e]/5 cursor-pointer' : 'border-[#f0eae2] bg-[#faf8f5] opacity-40 cursor-not-allowed'}`;
         btn.innerHTML = `
             <div class="flex justify-between items-center mb-1.5">
-                <span class="text-xs font-semibold text-[#1a1612]">Սեղ. ${table.table_number}</span>
-                <span class="text-[10px] text-[#8c7b66]">${catLabel[table.category] || ''}</span>
+                <span class="text-xs font-semibold text-[#1a1612]">Սեղ. ${table.table_number} ${sideBadge}</span>
+                <span class="text-[10px] text-[#8c7b66]">${catLabel[table.category]||''}</span>
             </div>
             <div class="flex items-center gap-2">
                 <div class="flex-1 h-1 bg-[#f0eae2] rounded-full overflow-hidden">
                     <div class="h-full rounded-full ${canFit ? 'bg-[#7a9e7e]' : 'bg-[#c4736a]'}" style="width:${pct}%"></div>
                 </div>
-                <span class="text-[10px] font-medium ${canFit ? 'text-[#7a9e7e]' : 'text-[#c4736a]'}">${available} ազատ / ${table.capacity}</span>
+                <span class="text-[10px] font-medium ${canFit ? 'text-[#7a9e7e]' : 'text-[#c4736a]'}">${avail} ազ/${table.capacity}</span>
             </div>
         `;
         if (canFit) btn.onclick = async () => { closeModal('tablePickerModal'); await seatGroupOnTable(guestInfo, count, table.id); };
@@ -1293,12 +1337,12 @@ async function openTablePicker(guestInfo, count) {
 async function seatGroupOnTable(guestInfo, count, tableId) {
     for (const member of guestInfo.unseatedMembers.slice(0, count)) {
         const seatIndex = await findNextFreeSeat(tableId);
-        if (seatIndex === null) { alert('Ազատ տեղ չկա կամ լրացավ սեղանը։'); break; }
+        if (seatIndex === null) { alert('Ազ. տեղ չկա։'); break; }
         const res = await apiFetch(
             `/api/v1/guest-members/${member.id}/seat?wedding_id=${weddingId}&table_id=${tableId}&seat_index=${seatIndex}`,
             { method: 'PUT' }
         );
-        if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.detail || 'Սխալ'); break; }
+        if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.detail || 'Սխ.'); break; }
     }
     loadTables(); loadUnseated(); loadGuests();
 }
@@ -1352,20 +1396,15 @@ async function exportToPDF() {
         apiFetch(`/api/v1/tables/wedding/${weddingId}`),
         apiFetch(`/api/v1/guests/wedding/${weddingId}`)
     ]);
-    if (!tablesRes.ok || !guestsRes.ok) { alert("Չհաջողվեց ներբեռնել տվյալները PDF-ի համար։"); return; }
-
+    if (!tablesRes.ok || !guestsRes.ok) { alert("Չհաջ. ստ. PDF։"); return; }
     const tables = await tablesRes.json();
     const guests = await guestsRes.json();
     tables.sort((a, b) => parseInt(a.table_number) - parseInt(b.table_number));
-
     const allMembers = [];
-    guests.forEach(g => {
-        if (g.members) g.members.forEach(m => allMembers.push({ ...m, guest_display_name: g.display_name }));
-    });
+    guests.forEach(g => { if (g.members) g.members.forEach(m => allMembers.push({ ...m, guest_display_name: g.display_name })); });
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(18);
     doc.text("HURERI NSTECMAN CUC AK", 14, 15);
@@ -1374,34 +1413,19 @@ async function exportToPDF() {
     tables.forEach(table => {
         const seatedHere = allMembers.filter(m => m.table_id === table.id);
         seatedHere.sort((a, b) => (a.seat_index || 0) - (b.seat_index || 0));
-        if (seatedHere.length === 0) {
-            tableRows.push([`Sg. ${table.table_number}`, "Datark seghan", ""]);
-        } else {
-            seatedHere.forEach((m, idx) => {
-                const chairNum  = m.seat_index !== null ? m.seat_index + 1 : idx + 1;
-                const seghanCell = idx === 0 ? `Seghan ${table.table_number}` : "";
-                tableRows.push([seghanCell, `Ator ${chairNum}`, m.first_name || "Ananun Hyur"]);
-            });
-        }
+        if (!seatedHere.length) { tableRows.push([`Sg. ${table.table_number}`, "Datark", ""]); }
+        else seatedHere.forEach((m, idx) => {
+            tableRows.push([idx === 0 ? `Seghan ${table.table_number}` : "", `Ator ${m.seat_index != null ? m.seat_index + 1 : idx + 1}`, m.first_name || "Ananun"]);
+        });
         tableRows.push(["", "", ""]);
     });
-
     doc.autoTable({
-        startY: 22,
-        head: [['Seghan', 'Ator', 'Anun Azganun']],
-        body: tableRows,
-        theme: 'striped',
+        startY: 22, head: [['Seghan', 'Ator', 'Anun']],
+        body: tableRows, theme: 'striped',
         headStyles: { fillColor: [26, 22, 18], textColor: [232, 213, 176], fontStyle: 'bold' },
         styles: { font: 'Helvetica', fontSize: 10, cellPadding: 3 },
         columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 30 } },
-        didParseCell: function (data) {
-            if (data.row.raw[0] === "" && data.row.raw[1] === "" && data.row.raw[2] === "") {
-                data.cell.styles.fillColor = [255, 255, 255];
-                data.cell.styles.lineColor = [255, 255, 255];
-            }
-        }
     });
-
     doc.save(`wedding_seating_id_${weddingId}.pdf`);
 }
 </script>

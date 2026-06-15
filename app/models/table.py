@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, func
 from sqlalchemy.orm import relationship
 from core.database import Base
 
@@ -11,6 +11,9 @@ class Table(Base):
     table_number = Column(String(50), nullable=False)
     category = Column(String(50), nullable=False)  # 'presidium', 'rectangle', 'double_rectangle', 'round'
     capacity = Column(Integer, nullable=False)
+    side = Column(String(50), nullable=False, default='mutual')  # 'bride', 'groom', 'mutual'
+    x_pos = Column(Float, nullable=True)   # Դիրք սրահի կտավում (px)
+    y_pos = Column(Float, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
     # Relationships

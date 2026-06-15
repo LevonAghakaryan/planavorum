@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session, joinedload
 from app.models.table import Table
 from app.schemas.table import TableCreate
-from typing import List
+from typing import List, Optional
 
 
 class TableRepository:
@@ -13,7 +13,8 @@ class TableRepository:
             wedding_id=table_data.wedding_id,
             table_number=table_data.table_number,
             category=table_data.category,
-            capacity=table_data.capacity
+            capacity=table_data.capacity,
+            side=table_data.side,
         )
         self.db.add(db_table)
         self.db.commit()
@@ -21,7 +22,6 @@ class TableRepository:
         return db_table
 
     def get_by_wedding(self, wedding_id: int) -> List[Table]:
-        # joinedload-ը բերում է նաև սեղանի բոլոր անդամներին (members) մեկ հարցումով
         return (
             self.db.query(Table)
             .options(joinedload(Table.members))
@@ -29,8 +29,7 @@ class TableRepository:
             .all()
         )
 
-    def get_by_id(self, table_id: int) -> Table | None:
-        # Այստեղ էլ կարող ես ավելացնել joinedload, եթե կոնկրետ սեղանի էջում ես բացում հյուրերին
+    def get_by_id(self, table_id: int) -> Optional[Table]:
         return (
             self.db.query(Table)
             .options(joinedload(Table.members))
@@ -38,10 +37,19 @@ class TableRepository:
             .first()
         )
 
-    def update_capacity(self, table_id: int, capacity: int) -> Table | None:
+    def update_capacity(self, table_id: int, capacity: int) -> Optional[Table]:
         db_table = self.get_by_id(table_id)
         if db_table:
             db_table.capacity = capacity
+            self.db.commit()
+            self.db.refresh(db_table)
+        return db_table
+
+    def update_position(self, table_id: int, x_pos: float, y_pos: float) -> Optional[Table]:
+        db_table = self.get_by_id(table_id)
+        if db_table:
+            db_table.x_pos = x_pos
+            db_table.y_pos = y_pos
             self.db.commit()
             self.db.refresh(db_table)
         return db_table

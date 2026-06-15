@@ -26,7 +26,6 @@ class TableService:
     def update_capacity(self, table_id: int, capacity: int):
         if capacity < 1:
             raise HTTPException(status_code=400, detail="Capacity must be at least 1")
-        # Check that new capacity is not less than currently seated
         seated = self.member_repo.count_seated_at_table(table_id)
         if capacity < seated:
             raise HTTPException(
@@ -34,6 +33,12 @@ class TableService:
                 detail=f"Չի կարելի կրճատել. արդեն {seated} հոգի նստած է այս սեղանի մոտ։"
             )
         table = self.table_repo.update_capacity(table_id, capacity)
+        if not table:
+            raise HTTPException(status_code=404, detail="Table not found")
+        return table
+
+    def update_position(self, table_id: int, x_pos: float, y_pos: float):
+        table = self.table_repo.update_position(table_id, x_pos, y_pos)
         if not table:
             raise HTTPException(status_code=404, detail="Table not found")
         return table

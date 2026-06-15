@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 
-from app.schemas.table import TableCreate, TableResponse
+from app.schemas.table import TableCreate, TableResponse, TablePositionUpdate
 from app.services.table import TableService
 from app.dependencies import get_table_service, verify_wedding_token
 
@@ -29,7 +29,7 @@ def get_wedding_tables(
 @router.get("/{table_id}/available-seats")
 def get_available_seats(
     table_id: int,
-    wedding_id: int,                                  # query param — token check-ի համար
+    wedding_id: int,
     service: TableService = Depends(get_table_service),
     _: int = Depends(verify_wedding_token),
 ):
@@ -46,6 +46,18 @@ def update_table_capacity(
     _: int = Depends(verify_wedding_token),
 ):
     return service.update_capacity(table_id, capacity)
+
+
+@router.put("/{table_id}/position", response_model=TableResponse)
+def update_table_position(
+    table_id: int,
+    wedding_id: int,
+    pos: TablePositionUpdate,
+    service: TableService = Depends(get_table_service),
+    _: int = Depends(verify_wedding_token),
+):
+    """Պահպանում է սեղանի x/y դիրքը կտավում։"""
+    return service.update_position(table_id, pos.x_pos, pos.y_pos)
 
 
 @router.delete("/{table_id}")
