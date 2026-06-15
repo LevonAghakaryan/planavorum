@@ -444,11 +444,25 @@ async function saveTablePosition(tableId, x, y) {
 }
 
 async function saveAllPositions() {
-    const tasks = Object.entries(tablePositions).map(([id, pos]) =>
-        saveTablePosition(parseInt(id), pos.x, pos.y)
+    const entries = Object.entries(tablePositions);
+    if (entries.length === 0) return;
+
+    const positions = entries.map(([id, pos]) => ({
+        table_id: parseInt(id),
+        x_pos: pos.x,
+        y_pos: pos.y,
+    }));
+
+    const res = await apiFetch(
+        `/api/v1/tables/bulk-position?wedding_id=${weddingId}`,
+        {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ positions }),
+        }
     );
-    await Promise.all(tasks);
-    showSaveIndicator();
+
+    if (res.ok) showSaveIndicator();
 }
 
 function showSaveIndicator() {

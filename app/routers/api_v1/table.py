@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 
-from app.schemas.table import TableCreate, TableResponse, TablePositionUpdate
+from app.schemas.table import TableCreate, TableResponse, TablePositionUpdate, TableBulkPositionUpdate
 from app.services.table import TableService
 from app.dependencies import get_table_service, verify_wedding_token
 
@@ -25,6 +25,15 @@ def get_wedding_tables(
 ):
     return service.get_wedding_tables(wedding_id)
 
+@router.put("/bulk-position")
+def bulk_update_table_positions(
+    wedding_id: int,
+    payload: TableBulkPositionUpdate,
+    service: TableService = Depends(get_table_service),
+    _: int = Depends(verify_wedding_token),
+):
+    updated = service.update_bulk_positions(wedding_id, payload)
+    return {"updated": updated}
 
 @router.get("/{table_id}/available-seats")
 def get_available_seats(
@@ -70,3 +79,4 @@ def delete_table(
     if not service.delete_table(table_id):
         raise HTTPException(status_code=404, detail="Table not found")
     return {"message": "Table deleted successfully"}
+

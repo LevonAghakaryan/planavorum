@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app.repositories.table import TableRepository
 from app.repositories.guest_members import GuestMemberRepository
-from app.schemas.table import TableCreate
+from app.schemas.table import TableCreate, TableBulkPositionUpdate
 from fastapi import HTTPException
 
 
@@ -45,3 +45,15 @@ class TableService:
 
     def delete_table(self, table_id: int):
         return self.table_repo.delete(table_id)
+
+    def update_bulk_positions(self, wedding_id: int, payload: TableBulkPositionUpdate) -> int:
+        updated = 0
+        for item in payload.positions:
+            db_table = self.table_repo.get_by_id(item.table_id)
+            # Security: ստուգել որ սեղանը հենց այս հարսանիքինն է
+            if db_table and db_table.wedding_id == wedding_id:
+                db_table.x_pos = item.x_pos
+                db_table.y_pos = item.y_pos
+                updated += 1
+        self.table_repo.db.commit()
+        return updated

@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Literal, Optional
-
+from typing import List
 
 class TableBase(BaseModel):
     table_number: str
@@ -20,6 +20,13 @@ class TablePositionUpdate(BaseModel):
     x_pos: float
     y_pos: float
 
+class TableBulkPositionItem(BaseModel):
+    table_id: int
+    x_pos: float
+    y_pos: float
+
+class TableBulkPositionUpdate(BaseModel):
+    positions: List[TableBulkPositionItem]
 
 # Պատասխանի (Response) համար
 class TableResponse(TableBase):
