@@ -1,10 +1,18 @@
 /**
- * hall.js — Սրահի կտավ, սեղաններ, drag & drop, zoom/pan, աթոռներ
- * Կախված է: api.js, state.js, modals.js (openModal/closeModal)
+ * hall.js — Hall canvas: render + drag/drop + zoom/pan + mutations.
+ *
+ * RULE: This file NEVER calls API.getGuests(), API.getTables(), or
+ *       API.getUnseatedMembers() directly.
+ *       renderHall() reads State.allGuests + State.allTables.
+ *       All mutations call updateAppState() when done.
+ *
+ * Depends on: api.js, state.js (State + updateAppState), modals.js
  */
 
-// ── Auto-save debounce ────────────────────────────────────────────────────────
+// ── Position save (debounce per table + bulk on demand) ───────────────────────
+
 let _saveTimer = null;
+
 function scheduleSave(tableId) {
     clearTimeout(_saveTimer);
     _saveTimer = setTimeout(() => {
@@ -12,6 +20,7 @@ function scheduleSave(tableId) {
         if (pos) _savePositionSilent(tableId, pos.x, pos.y);
     }, 1000);
 }
+
 async function _savePositionSilent(tableId, x, y) {
     const res = await API.updateTablePosition(tableId, x, y);
     if (res.ok) showSaveIndicator();
@@ -20,7 +29,11 @@ async function _savePositionSilent(tableId, x, y) {
 async function saveAllPositions() {
     const entries = Object.entries(State.tablePositions);
     if (!entries.length) return;
-    const positions = entries.map(([id, pos]) => ({ table_id: parseInt(id), x_pos: pos.x, y_pos: pos.y }));
+    const positions = entries.map(([id, pos]) => ({
+        table_id: parseInt(id),
+        x_pos:    pos.x,
+        y_pos:    pos.y,
+    }));
     const res = await API.bulkUpdatePositions(positions);
     if (res.ok) showSaveIndicator();
 }
@@ -33,34 +46,41 @@ function showSaveIndicator() {
 }
 
 // ── Zoom & Pan ────────────────────────────────────────────────────────────────
+
 function updateCanvasTransform() {
     const w = document.getElementById('zoomWrapper');
     if (w) w.style.transform = `translate(${State.panOffset.x}px,${State.panOffset.y}px) scale(${State.zoomScale})`;
 }
+
 function zoomHall(f) {
     State.zoomScale = Math.min(2.5, Math.max(0.3, State.zoomScale * f));
     updateCanvasTransform();
 }
+
 function resetZoom() {
-    State.zoomScale = 1.0;
-    State.panOffset = { x: 0, y: 0 };
+    State.zoomScale  = 1.0;
+    State.panOffset  = { x: 0, y: 0 };
     updateCanvasTransform();
 }
 
 function initHallPanZoom() {
     const container = document.getElementById('hallContainer');
     if (!container) return;
+
     container.addEventListener('mousedown', (e) => {
         if (e.target.closest('.movable-table') || e.target.closest('.chair') || e.target.tagName === 'BUTTON') return;
-        State.isPanning = true;
+        State.isPanning      = true;
         container.style.cursor = 'grabbing';
-        State.panStart.x = e.clientX - State.panOffset.x;
-        State.panStart.y = e.clientY - State.panOffset.y;
+        State.panStart.x     = e.clientX - State.panOffset.x;
+        State.panStart.y     = e.clientY - State.panOffset.y;
     });
+
     container.addEventListener('wheel', (e) => {
         e.preventDefault();
         const f = 1.08;
-        State.zoomScale = e.deltaY < 0 ? Math.min(2.5, State.zoomScale * f) : Math.max(0.3, State.zoomScale / f);
+        State.zoomScale = e.deltaY < 0
+            ? Math.min(2.5, State.zoomScale * f)
+            : Math.max(0.3, State.zoomScale / f);
         updateCanvasTransform();
     }, { passive: false });
 }
@@ -99,7 +119,8 @@ document.addEventListener('mouseup', () => {
     }
 });
 
-// ── Hall side filter ──────────────────────────────────────────────────────────
+// ── Hall side filter (local — re-renders DOM attributes, no fetch) ────────────
+
 function filterHall(side) {
     State.currentHallFilter = side;
     ['all', 'bride', 'groom', 'mutual'].forEach(s => {
@@ -111,12 +132,12 @@ function filterHall(side) {
     });
     document.querySelectorAll('.movable-table').forEach(el => {
         const tSide = el.getAttribute('data-side') || 'mutual';
-        if (side === 'all' || tSide === side) el.classList.remove('hall-hidden');
-        else el.classList.add('hall-hidden');
+        el.classList.toggle('hall-hidden', side !== 'all' && tSide !== side);
     });
 }
 
-// ── Table geometry ────────────────────────────────────────────────────────────
+// ── Table geometry helpers ────────────────────────────────────────────────────
+
 function getTableDimensions(category, capacity = 10) {
     switch (category) {
         case 'round': {
@@ -150,13 +171,14 @@ function getChairPosition(category, i, total, dim) {
         const spacing = w / (total + 1);
         return { x: spacing * (i + 1), y: -16 };
     }
-    const half = Math.ceil(total / 2);
+    const half    = Math.ceil(total / 2);
     const spacing = w / (half + 1);
-    if (i < half) return { x: spacing * (i + 1), y: -16 };
-    return { x: spacing * (i - half + 1), y: h + 16 };
+    if (i < half) return { x: spacing * (i + 1),          y: -16 };
+    return             { x: spacing * (i - half + 1),     y: h + 16 };
 }
 
 // ── Rotate ────────────────────────────────────────────────────────────────────
+
 function rotateTable(tableId, degrees) {
     if (State.tableRotations[tableId] === undefined) State.tableRotations[tableId] = 0;
     State.tableRotations[tableId] = (State.tableRotations[tableId] + degrees) % 360;
@@ -169,9 +191,10 @@ function rotateTable(tableId, degrees) {
     }
 }
 
-// ── Build table DOM element ───────────────────────────────────────────────────
+// ── Build single table DOM element ───────────────────────────────────────────
+
 function buildTableElement(table, allMembers) {
-    const dim = getTableDimensions(table.category, table.capacity);
+    const dim  = getTableDimensions(table.category, table.capacity);
     const tDiv = document.createElement('div');
     tDiv.className = 'movable-table';
     tDiv.setAttribute('data-table-id', table.id);
@@ -195,9 +218,11 @@ function buildTableElement(table, allMembers) {
         'position:relative', 'width:100%', 'height:100%',
         'background:#e8e0d4', `border:2px solid ${sideBorderColor}`,
         'display:flex', 'align-items:center', 'justify-content:center', 'flex-direction:column',
-        table.category === 'round'     ? 'border-radius:50%' :
-        table.category === 'presidium' ? 'border-radius:8px;background:#ddd5c4' :
-        'border-radius:10px',
+        table.category === 'round'
+            ? 'border-radius:50%'
+            : table.category === 'presidium'
+                ? 'border-radius:8px;background:#ddd5c4'
+                : 'border-radius:10px',
     ].join(';');
     body.innerHTML = `
         <div style="text-align:center;pointer-events:none;z-index:2;">
@@ -229,10 +254,10 @@ function buildTableElement(table, allMembers) {
 
     // ── Chairs ──
     const seatedHere  = allMembers.filter(m => m.table_id === table.id);
-    const autoMembers = seatedHere.filter(m => m.seat_index == null).slice(); // copy for shifting
+    const autoMembers = seatedHere.filter(m => m.seat_index == null).slice();
 
     for (let i = 0; i < table.capacity; i++) {
-        const chair = document.createElement('div');
+        const chair  = document.createElement('div');
         chair.className = 'chair';
 
         let member = seatedHere.find(m => m.seat_index === i);
@@ -249,7 +274,6 @@ function buildTableElement(table, allMembers) {
             chair.onclick   = (e) => { e.stopPropagation(); openGuestPickerForSeat(table.id, i); };
         }
 
-        // Drag-over per chair
         chair.addEventListener('dragover', (e) => {
             e.preventDefault(); e.stopPropagation();
             if (!chair.classList.contains('occupied')) {
@@ -258,7 +282,10 @@ function buildTableElement(table, allMembers) {
             }
         });
         chair.addEventListener('dragleave', () => {
-            if (!chair.classList.contains('occupied')) { chair.style.borderColor = ''; chair.style.background = ''; }
+            if (!chair.classList.contains('occupied')) {
+                chair.style.borderColor = '';
+                chair.style.background  = '';
+            }
         });
         chair.addEventListener('drop', async (e) => {
             e.preventDefault(); e.stopPropagation();
@@ -275,7 +302,7 @@ function buildTableElement(table, allMembers) {
         body.appendChild(chair);
     }
 
-    // ── Table drag (move) ──
+    // ── Table drag (move on canvas) ──
     tDiv.addEventListener('mousedown', (e) => {
         if (e.target.tagName === 'BUTTON' || e.target.classList.contains('chair')) return;
         e.preventDefault();
@@ -286,37 +313,38 @@ function buildTableElement(table, allMembers) {
         State.dragOffset.y = (e.clientY - wrapRect.top)  / State.zoomScale - parseFloat(tDiv.style.top  || 0);
     });
 
-    // ── Table as drop target (drop group) ──
-    tDiv.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); tDiv.classList.add('drag-over'); });
+    // ── Table as drop target (drop whole member onto table body) ──
+    tDiv.addEventListener('dragover',  (e) => { e.preventDefault(); e.stopPropagation(); tDiv.classList.add('drag-over'); });
     tDiv.addEventListener('dragleave', (e) => { if (!tDiv.contains(e.relatedTarget)) tDiv.classList.remove('drag-over'); });
     tDiv.addEventListener('drop', async (e) => {
         e.preventDefault(); e.stopPropagation();
         tDiv.classList.remove('drag-over');
         const memberId = e.dataTransfer.getData('text/plain');
-        if (memberId) await seatMemberOnTable(parseInt(memberId), table.id);
-        await reloadHall();
-        await reloadUnseated();
-        await reloadGuests();
+        if (memberId) {
+            await seatMemberOnTable(parseInt(memberId), table.id);
+            await updateAppState();
+        }
     });
 
     return tDiv;
 }
 
-// ── Load & render tables ──────────────────────────────────────────────────────
-async function loadTables() {
-    const [tablesRes, guestsRes] = await Promise.all([API.getTables(), API.getGuests()]);
-    if (!tablesRes.ok) return;
-    const tables = await tablesRes.json();
-    let allMembers = [];
-    if (guestsRes.ok) {
-        const guests = await guestsRes.json();
-        guests.forEach(g => g.members.forEach(m => allMembers.push(m)));
-    }
+// ── Pure UI renderer ──────────────────────────────────────────────────────────
 
+/**
+ * renderHall()
+ * Called by updateAppState() after State has been refreshed.
+ * Reads State.allTables + State.allGuests — does not fetch anything.
+ */
+function renderHall() {
     const wrapper = document.getElementById('zoomWrapper');
+    if (!wrapper) return;
     wrapper.innerHTML = '';
 
-    tables.forEach((table, index) => {
+    const allMembers = State.allGuests.flatMap(g => g.members);
+
+    State.allTables.forEach((table, index) => {
+        // Preserve existing positions across re-renders; fall back to auto-layout
         if (State.tablePositions[table.id] === undefined) {
             State.tablePositions[table.id] = {
                 x: table.x_pos != null ? table.x_pos : 60 + (index % 3) * 300,
@@ -329,10 +357,11 @@ async function loadTables() {
     filterHall(State.currentHallFilter);
 }
 
-// Alias used by other modules
-const reloadHall = loadTables;
+// Legacy alias so manage.html init block keeps working
+const loadTables = () => updateAppState();
 
-// ── Seat on specific chair ────────────────────────────────────────────────────
+// ── Seat on a specific chair ──────────────────────────────────────────────────
+
 async function seatMemberOnChair(memberId, tableId, seatIndex) {
     const res = await API.seatMember(memberId, tableId, seatIndex);
     if (!res.ok) {
@@ -340,29 +369,37 @@ async function seatMemberOnChair(memberId, tableId, seatIndex) {
         alert(err.detail || 'Ազատ տեղ չկա կամ սխալ կատարվեց');
         return;
     }
-    await Promise.all([loadTables(), reloadUnseated(), reloadGuests()]);
+    await updateAppState();
 }
 
-// ── Guest picker for a specific chair ────────────────────────────────────────
+// ── Guest picker for a specific empty chair ───────────────────────────────────
+
+/**
+ * Reads State.allGuests + State.unseatedMembers — no fetch.
+ */
 function openGuestPickerForSeat(tableId, seatIndex) {
     State.pendingSeatTableId = tableId;
     State.pendingSeatIndex   = seatIndex;
     const list = document.getElementById('guestPickerList');
     list.innerHTML = '';
 
+    const unseatedIds = new Set(State.unseatedMembers.map(m => m.id.toString()));
+
     if (!State.unseatedMembers.length) {
-        list.innerHTML = '<p class="text-center text-[#8c7b66] text-sm italic py-6">Չնստեցված հյուրեր չկան 🎉</p>';
+        list.innerHTML = '<p class="text-center text-[#8c7b66] text-sm italic py-6">Չնստ. հյուրեր չկան 🎉</p>';
         openModal('guestPickerModal');
         return;
     }
-    const unseatedIds = new Set(State.unseatedMembers.map(m => m.id.toString()));
+
     State.allGuests.forEach(guest => {
         const um = guest.members.filter(m => unseatedIds.has(m.id.toString()));
         if (!um.length) return;
+
         const hdr = document.createElement('div');
         hdr.className = 'text-[11px] font-bold text-[#8c7b66] uppercase tracking-wider mt-3 mb-1 px-1';
         hdr.innerText = guest.display_name;
         list.appendChild(hdr);
+
         um.forEach(m => {
             const btn = document.createElement('button');
             btn.className = 'w-full text-left px-3 py-2 rounded-lg border border-[#e8ddd0] bg-white text-xs font-medium text-[#1a1612] flex justify-between items-center hover:border-[#c9a96e] hover:bg-[#c9a96e]/5 transition-all mb-1';
@@ -374,10 +411,12 @@ function openGuestPickerForSeat(tableId, seatIndex) {
             list.appendChild(btn);
         });
     });
+
     openModal('guestPickerModal');
 }
 
-// ── Manage seated member (click on occupied chair) ────────────────────────────
+// ── Manage seated member (click occupied chair) ───────────────────────────────
+
 function manageSeatedMember(member) {
     document.getElementById('chairActionsTitle').innerText = member.first_name || 'Անանուն հյուր';
     document.getElementById('chairActionRenameBtn').onclick = () => {
@@ -391,14 +430,15 @@ function manageSeatedMember(member) {
             async () => {
                 await API.unseatMember(member.id);
                 closeModal('confirmDeleteModal');
-                await Promise.all([loadTables(), reloadUnseated()]);
-            }
+                await updateAppState();
+            },
         );
     };
     openModal('chairActionsModal');
 }
 
 // ── Add table flow ────────────────────────────────────────────────────────────
+
 function selectNewTableSide(side) {
     State.pendingNewSide = side;
     document.querySelectorAll('.nts-btn').forEach(b => {
@@ -439,13 +479,17 @@ async function confirmAddTable() {
     const num = document.getElementById('newTableNumber').value.trim();
     if (!num) { document.getElementById('newTableNumber').focus(); return; }
     const res = await API.createTable(num, State.pendingNewCategory, State.pendingNewCapacity, State.pendingNewSide);
-    if (res.ok) { closeModal('addTableModal'); await loadTables(); }
+    if (res.ok) {
+        closeModal('addTableModal');
+        await updateAppState();
+    }
 }
 
 // ── Edit capacity ─────────────────────────────────────────────────────────────
+
 function editTableCapacity(tableId, current) {
-    State.pendingEditTableId      = tableId;
-    State.pendingEditCapacityVal  = current;
+    State.pendingEditTableId     = tableId;
+    State.pendingEditCapacityVal = current;
     document.getElementById('editCapacityDisplay').innerText = current;
     openModal('editCapacityModal');
 }
@@ -457,11 +501,17 @@ function changeEditCapacity(delta) {
 
 async function confirmEditCapacity() {
     const res = await API.updateTableCapacity(State.pendingEditTableId, State.pendingEditCapacityVal);
-    if (res.ok) { closeModal('editCapacityModal'); await loadTables(); }
-    else { const err = await res.json().catch(() => ({})); alert(err.detail || 'Սխալ կատարվեց'); }
+    if (res.ok) {
+        closeModal('editCapacityModal');
+        await updateAppState();
+    } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || 'Սխալ կատարվեց');
+    }
 }
 
 // ── Delete table ──────────────────────────────────────────────────────────────
+
 function deleteTable(id) {
     showConfirmDelete(
         'Ջնջե՞լ սեղանը։ Բոլոր հյուրերը կազատվեն։',
@@ -469,12 +519,13 @@ function deleteTable(id) {
             await API.deleteTable(id);
             delete State.tablePositions[id];
             closeModal('confirmDeleteModal');
-            await Promise.all([loadTables(), reloadUnseated()]);
-        }
+            await updateAppState();
+        },
     );
 }
 
 // ── Dropdown menu ─────────────────────────────────────────────────────────────
+
 function toggleTableMenu(event) {
     event.stopPropagation();
     const menu  = document.getElementById('tableDropdownMenu');
@@ -493,7 +544,7 @@ function triggerMenuAction(category) {
 document.addEventListener('click', (e) => {
     const menu = document.getElementById('tableDropdownMenu');
     const btn  = document.getElementById('tableMenuBtn');
-    if (menu && !menu.classList.contains('hidden') && !btn.contains(e.target)) {
+    if (menu && !menu.classList.contains('hidden') && btn && !btn.contains(e.target)) {
         menu.classList.add('hidden');
         document.getElementById('menuArrow').style.transform = 'rotate(0deg)';
     }

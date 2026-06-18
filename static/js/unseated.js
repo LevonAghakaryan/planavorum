@@ -1,21 +1,21 @@
 /**
- * unseated.js — Չնստեցվածներ panel, seat flow (count → table picker)
- * Կախված է: api.js, state.js, modals.js, hall.js (seatMemberOnTable)
+ * unseated.js — Unseated members panel: render + mutation handlers.
+ *
+ * RULE: This file NEVER calls any API.get*() endpoint directly.
+ *       It reads State.allGuests + State.unseatedMembers and calls
+ *       updateAppState() after mutations.
+ *
+ * Depends on: api.js, state.js (State + updateAppState), modals.js, hall.js (seatMemberOnTable)
  */
 
-async function reloadUnseated() {
-    const [gR, uR] = await Promise.all([API.getGuests(), API.getUnseatedMembers()]);
-    if (!gR.ok || !uR.ok) {
-        document.getElementById('unseatedContainer').innerHTML =
-            '<p class="text-center text-[#8c7b66] text-xs italic py-6">Սխալ</p>';
-        return;
-    }
-    State.allGuests       = await gR.json();
-    State.unseatedMembers = await uR.json();
-    renderUnseatedList();
-}
+// ── Pure UI renderer ──────────────────────────────────────────────────────────
 
-function renderUnseatedList() {
+/**
+ * renderUnseatedPanel()
+ * Called by updateAppState() after State has been refreshed.
+ * Reads State.allGuests + State.unseatedMembers — does not fetch anything.
+ */
+function renderUnseatedPanel() {
     const container = document.getElementById('unseatedContainer');
     if (!container) return;
 
@@ -37,16 +37,20 @@ function renderUnseatedList() {
         hasVisible = true;
 
         const guestUnseated = guest.members.filter(m => unseatedIds.has(m.id));
-        const uc   = guestUnseated.length;
+        const uc    = guestUnseated.length;
         const total = guest.members.length;
-        const pillCls  = uc === 0 ? 'bg-[#7a9e7e]/10 text-[#7a9e7e]' : uc === total ? 'bg-[#c4736a]/10 text-[#c4736a]' : 'bg-[#c9a96e]/15 text-[#8a6c30]';
+        const pillCls  = uc === 0
+            ? 'bg-[#7a9e7e]/10 text-[#7a9e7e]'
+            : uc === total
+                ? 'bg-[#c4736a]/10 text-[#c4736a]'
+                : 'bg-[#c9a96e]/15 text-[#8a6c30]';
         const pillText = uc === 0 ? '✓ Բոլ.' : uc === total ? `${uc} Չ.Ն.` : `${uc}/${total}`;
 
-        const card = document.createElement('div');
+        const card   = document.createElement('div');
         card.className = 'bg-white rounded-xl border border-[#e8ddd0] mb-2 overflow-hidden hover:shadow-sm transition-shadow';
 
-        const isOpen   = State.openedGroupIds.has(guest.id);
-        const header   = document.createElement('div');
+        const isOpen = State.openedGroupIds.has(guest.id);
+        const header = document.createElement('div');
         header.className = 'flex items-center gap-2 px-3 py-2.5 cursor-pointer';
         header.innerHTML = `
             <span class="text-xs font-semibold text-[#1a1612] flex-1 truncate">${guest.display_name}</span>
@@ -79,7 +83,7 @@ function renderUnseatedList() {
                 <span class="flex-1 ${isSeated ? 'text-[#7a9e7e]' : 'text-[#5c4f3d]'}">${m.first_name || 'Անանուն'}</span>
                 ${isSeated
                     ? `<span class="text-[9px] bg-[#7a9e7e]/10 text-[#7a9e7e] px-1.5 py-0.5 rounded-full">Սեղ.${m.table_id}</span>
-                       <button onclick="unseatMember(${m.id})" class="text-[#8c7b66] hover:text-[#c4736a] text-[10px] transition-colors">✕</button>`
+                       <button onclick="unseatMemberAction(${m.id})" class="text-[#8c7b66] hover:text-[#c4736a] text-[10px] transition-colors">✕</button>`
                     : '<span class="text-[9px] text-[#c8bfb2]">⋮⋮ drag</span>'
                 }`;
             expandDiv.appendChild(row);
@@ -98,14 +102,14 @@ function renderUnseatedList() {
     });
 
     container.innerHTML = '';
-    if (!hasVisible) container.innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Կողմից Չ.Ն. չկան 🍃</p>';
-    else container.appendChild(fragment);
+    if (!hasVisible) {
+        container.innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Կողմից Չ.Ն. չկան 🍃</p>';
+    } else {
+        container.appendChild(fragment);
+    }
 }
 
-async function unseatMember(memberId) {
-    await API.unseatMember(memberId);
-    await Promise.all([reloadHall(), reloadUnseated()]);
-}
+// ── Filter (local — no fetch needed) ─────────────────────────────────────────
 
 function filterUnseatedMembers(side) {
     State.currentUnseatedFilter = side;
@@ -116,13 +120,22 @@ function filterUnseatedMembers(side) {
             ? 'flex-1 py-1.5 text-[11px] font-semibold rounded-lg transition-all bg-[#1a1612] text-[#e8d5b0] shadow-sm'
             : 'flex-1 py-1.5 text-[11px] font-semibold rounded-lg text-[#5c4f3d] hover:bg-[#f7f3ee] transition-all';
     });
-    renderUnseatedList();
+    renderUnseatedPanel(); // re-render from State — no fetch
+}
+
+// ── Mutations (write → updateAppState) ───────────────────────────────────────
+
+async function unseatMemberAction(memberId) {
+    await API.unseatMember(memberId);
+    await updateAppState();
 }
 
 // ── Seat Count Modal ──────────────────────────────────────────────────────────
+
 function openSeatCountModal(guestId) {
     const guest = State.allGuests.find(g => g.id === guestId);
     if (!guest) return;
+
     const unseatedIds   = new Set(State.unseatedMembers.map(m => m.id));
     const guestUnseated = guest.members.filter(m => unseatedIds.has(m.id));
     if (!guestUnseated.length) { alert('Բոլ. արդ. նստ.'); return; }
@@ -139,46 +152,50 @@ function openSeatCountModal(guestId) {
 
 function changeSeatCount(delta) {
     if (!State.pendingSeatGuest) return;
-    State.pendingSeatCount = Math.max(1, Math.min(State.pendingSeatGuest.unseatedMembers.length, State.pendingSeatCount + delta));
+    State.pendingSeatCount = Math.max(
+        1,
+        Math.min(State.pendingSeatGuest.unseatedMembers.length, State.pendingSeatCount + delta),
+    );
     document.getElementById('seatCountDisplay').innerText = State.pendingSeatCount;
 }
 
 async function confirmSeatCount() {
     if (!State.pendingSeatGuest) return;
     closeModal('seatCountModal');
-    await openTablePickerModal(State.pendingSeatGuest, State.pendingSeatCount);
+    openTablePickerModal(State.pendingSeatGuest, State.pendingSeatCount);
 }
 
 // ── Table Picker Modal ────────────────────────────────────────────────────────
-async function openTablePickerModal(guestInfo, count) {
-    const [tR, gR] = await Promise.all([API.getTables(), API.getGuests()]);
-    if (!tR.ok) return;
-    const tables = await tR.json();
-    const allMembers = [];
-    if (gR.ok) { const gs = await gR.json(); gs.forEach(g => g.members.forEach(m => allMembers.push(m))); }
 
+/**
+ * Reads State.allTables + State.allGuests — no fetch.
+ */
+function openTablePickerModal(guestInfo, count) {
     document.getElementById('tablePickerTitle').innerText = `${count} հոգ. համ.`;
     const list = document.getElementById('tablePickerList');
     list.innerHTML = '';
 
-    if (!tables.length) {
+    if (!State.allTables.length) {
         list.innerHTML = '<p class="text-center text-[#8c7b66] text-sm italic py-6">Սեղ. չկան</p>';
         openModal('tablePickerModal');
         return;
     }
 
-    tables.forEach(table => {
-        const seated   = allMembers.filter(m => m.table_id === table.id).length;
-        const avail    = table.capacity - seated;
-        const canFit   = avail >= count;
-        const pct      = Math.round((seated / table.capacity) * 100);
-        const sideBadge = { bride:'👰', groom:'🤵', mutual:'🤝' }[table.side || 'mutual'];
+    const allMembers = State.allGuests.flatMap(g => g.members);
+
+    State.allTables.forEach(table => {
+        const seated  = allMembers.filter(m => m.table_id === table.id).length;
+        const avail   = table.capacity - seated;
+        const canFit  = avail >= count;
+        const pct     = Math.round((seated / table.capacity) * 100);
+        const sideBadge = { bride: '👰', groom: '🤵', mutual: '🤝' }[table.side || 'mutual'];
 
         const btn = document.createElement('button');
         btn.disabled  = !canFit;
         btn.className = `w-full text-left px-3 py-2.5 rounded-xl border transition-all ${
-            canFit ? 'border-[#e8ddd0] bg-white hover:border-[#c9a96e] hover:bg-[#c9a96e]/5 cursor-pointer'
-                   : 'border-[#f0eae2] bg-[#faf8f5] opacity-40 cursor-not-allowed'}`;
+            canFit
+                ? 'border-[#e8ddd0] bg-white hover:border-[#c9a96e] hover:bg-[#c9a96e]/5 cursor-pointer'
+                : 'border-[#f0eae2] bg-[#faf8f5] opacity-40 cursor-not-allowed'}`;
         btn.innerHTML = `
             <div class="flex justify-between items-center mb-1.5">
                 <span class="text-xs font-semibold text-[#1a1612]">Սեղ. ${table.table_number} ${sideBadge}</span>
@@ -191,12 +208,15 @@ async function openTablePickerModal(guestInfo, count) {
                 <span class="text-[10px] font-medium ${canFit ? 'text-[#7a9e7e]' : 'text-[#c4736a]'}">${avail} ազ/${table.capacity}</span>
             </div>`;
 
-        if (canFit) btn.onclick = async () => {
-            closeModal('tablePickerModal');
-            await seatGroupOnTable(guestInfo, count, table.id);
-        };
+        if (canFit) {
+            btn.onclick = async () => {
+                closeModal('tablePickerModal');
+                await seatGroupOnTable(guestInfo, count, table.id);
+            };
+        }
         list.appendChild(btn);
     });
+
     openModal('tablePickerModal');
 }
 
@@ -204,32 +224,37 @@ async function seatGroupOnTable(guestInfo, count, tableId) {
     for (const member of guestInfo.unseatedMembers.slice(0, count)) {
         const ok = await seatMemberOnTable(member.id, tableId);
         if (!ok) break;
+        // Optimistically update State so findNextFreeSeatFromState stays accurate
+        // for subsequent members in this loop — no refetch needed mid-loop.
+        const placed = State.allGuests.flatMap(g => g.members).find(m => m.id === member.id);
+        if (placed) placed.table_id = tableId;
     }
-    await Promise.all([reloadHall(), reloadUnseated(), reloadGuests()]);
+    await updateAppState();
 }
 
-// ── Guest picker (from table sheet "free seat") ───────────────────────────────
+// ── Guest Picker (from Table Sheet "free seat") ───────────────────────────────
+
+/**
+ * Reads State.allGuests + State.unseatedMembers — no fetch.
+ */
 function openGuestPicker(tableId) {
     State.pendingSeatTableId = tableId;
     const list = document.getElementById('guestPickerList');
     list.innerHTML = '';
 
-    if (!State.unseatedMembers.length) {
-        list.innerHTML = '<p class="text-center text-[#8c7b66] text-sm italic py-6">Չնստ. հյուրեր չկան 🎉</p>';
-        openModal('guestPickerModal');
-        return;
-    }
-
     const unseatedIds = new Set(State.unseatedMembers.map(m => m.id.toString()));
     let hasGroups = false;
+
     State.allGuests.forEach(guest => {
         const um = guest.members.filter(m => unseatedIds.has(m.id.toString()));
         if (!um.length) return;
         hasGroups = true;
+
         const hdr = document.createElement('div');
         hdr.className = 'text-[11px] font-bold text-[#8c7b66] uppercase tracking-wider mt-3 mb-1 px-1';
         hdr.innerText = guest.display_name;
         list.appendChild(hdr);
+
         um.forEach(m => {
             const btn = document.createElement('button');
             btn.className = 'w-full text-left px-3 py-2 rounded-lg border border-[#e8ddd0] bg-white text-xs font-medium text-[#1a1612] flex justify-between items-center hover:border-[#c9a96e] hover:bg-[#c9a96e]/5 transition-all mb-1';
@@ -237,11 +262,14 @@ function openGuestPicker(tableId) {
             btn.addEventListener('click', async () => {
                 await seatMemberOnTable(m.id, tableId);
                 closeModal('guestPickerModal');
-                await Promise.all([reloadHall(), reloadUnseated(), reloadGuests()]);
+                await updateAppState();
             });
             list.appendChild(btn);
         });
     });
-    if (!hasGroups) list.innerHTML = '<p class="text-center text-[#8c7b66] text-sm italic py-6">Չնստ. հյուրեր չկան 🎉</p>';
+
+    if (!hasGroups) {
+        list.innerHTML = '<p class="text-center text-[#8c7b66] text-sm italic py-6">Չնստ. հյուրեր չկան 🎉</p>';
+    }
     openModal('guestPickerModal');
 }

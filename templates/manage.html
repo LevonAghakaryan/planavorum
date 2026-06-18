@@ -318,13 +318,14 @@
 </div>
 
 <!-- ════ SCRIPTS ════ -->
+
 <!-- Global constants injected from server -->
 <script>
     const weddingId    = {{ wedding_id }};
     const weddingToken = "{{ wedding_token }}";
 </script>
 
-<!-- Modules (order matters: api → state → modals → hall → guests → unseated → init) -->
+<!-- Modules: order matters — api → state → modals → hall → guests → unseated -->
 <script src="/static/js/api.js"></script>
 <script src="/static/js/state.js"></script>
 <script src="/static/js/modals.js"></script>
@@ -335,10 +336,10 @@
 <!-- Page init -->
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
-    // Init pan/zoom
+    // Init pan/zoom listeners (no data fetch)
     initHallPanZoom();
 
-    // Load wedding title
+    // Load wedding title (single lightweight call, not part of app state)
     const wRes = await API.getWedding();
     if (wRes.ok) {
         const w = await wRes.json();
@@ -346,8 +347,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.title = w.title;
     }
 
-    // Initial data load
-    await Promise.all([loadTables(), reloadGuests(), reloadUnseated()]);
+    // Single orchestrated load: 1 request per endpoint, all panels rendered
+    await updateAppState();
 });
 </script>
 

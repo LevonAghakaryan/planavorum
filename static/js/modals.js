@@ -1,24 +1,35 @@
 /**
- * modals.js — Modal helpers, table sheet, rename, confirm-delete, PDF
- * Կախված է: api.js, state.js
+ * modals.js — Modal helpers, table sheet, rename, confirm-delete, PDF export.
+ *
+ * RULE: openTableSheet() and openRenameModal() read from State — no extra
+ *       API.get*() calls for data that updateAppState() already fetched.
+ *       Only write calls (renameMember, unseatMember) are made here.
+ *
+ * Depends on: api.js, state.js (State + updateAppState)
  */
 
 // ── Core modal open/close ─────────────────────────────────────────────────────
+
 function openModal(id)  { document.getElementById(id)?.classList.add('open'); }
 function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
 
 // ── Confirm-delete helper ─────────────────────────────────────────────────────
+
 function showConfirmDelete(text, onConfirm) {
     document.getElementById('confirmDeleteText').innerText = text;
     openModal('confirmDeleteModal');
     document.getElementById('executeDeleteBtn').onclick = onConfirm;
 }
 
-// ── Rename member helper ──────────────────────────────────────────────────────
+// ── Rename member ─────────────────────────────────────────────────────────────
+
 /**
- * reloadTarget: 'all' | 'guests' | 'hall'
+ * openRenameModal(memberId, oldName)
+ *
+ * The `reloadTarget` parameter from the old version is removed — after rename
+ * we always call updateAppState() which refreshes everything consistently.
  */
-function openRenameModal(memberId, oldName, reloadTarget = 'all') {
+function openRenameModal(memberId, oldName) {
     const input = document.getElementById('renameMemberInput');
     input.value = oldName;
     openModal('renameMemberModal');
@@ -30,25 +41,26 @@ function openRenameModal(memberId, oldName, reloadTarget = 'all') {
         const res = await API.renameMember(memberId, newName);
         if (res.ok) {
             closeModal('renameMemberModal');
-            closeModal('tableSheetModal');   // safe if not open
-            if (reloadTarget === 'all' || reloadTarget === 'hall')    await reloadHall();
-            if (reloadTarget === 'all' || reloadTarget === 'guests')  await reloadGuests();
-            if (reloadTarget === 'all')                               await reloadUnseated();
+            closeModal('tableSheetModal');  // safe if not open
+            await updateAppState();
         }
     };
 }
 
 // ── Table Sheet ───────────────────────────────────────────────────────────────
-async function openTableSheet(tableId) {
-    const [guestsRes, tablesRes] = await Promise.all([API.getGuests(), API.getTables()]);
-    if (!guestsRes.ok || !tablesRes.ok) return;
 
-    const guests  = await guestsRes.json();
-    const tables  = await tablesRes.json();
-    const table   = tables.find(t => t.id === tableId);
+/**
+ * openTableSheet(tableId)
+ *
+ * Reads from State.allGuests + State.allTables — no API fetch needed.
+ */
+function openTableSheet(tableId) {
+    const table = State.allTables.find(t => t.id === tableId);
     if (!table) return;
 
-    const allMembers = guests.flatMap(g => g.members.map(m => ({ ...m, guestName: g.display_name })));
+    const allMembers = State.allGuests.flatMap(g =>
+        g.members.map(m => ({ ...m, guestName: g.display_name })),
+    );
     const seatedHere = allMembers.filter(m => m.table_id === tableId);
 
     document.getElementById('tableSheetTitle').innerText = `Սեղ. ${table.table_number} — Թերթ. 📋`;
@@ -71,7 +83,7 @@ async function openTableSheet(tableId) {
             <div style="flex:1;font-size:12px;font-weight:500;">👤 ${m.first_name || 'Անանուն'}</div>
             <div style="display:flex;gap:4px;">
                 <button style="background:none;border:none;cursor:pointer;padding:2px 6px;"
-                    onclick="openRenameModal(${m.id},'${(m.first_name||'').replace(/'/g,"\\'")}','all')">✏️</button>
+                    onclick="openRenameModal(${m.id},'${(m.first_name || '').replace(/'/g, "\\'")}')">✏️</button>
                 <button style="background:none;border:none;cursor:pointer;padding:2px 6px;color:#c4736a;"
                     onclick="sheetRemoveMember(${m.id})">✕</button>
             </div>`;
@@ -91,7 +103,11 @@ async function openTableSheet(tableId) {
             row.style.cssText = 'display:flex;align-items:center;margin-bottom:6px;padding:8px;border:1px dashed #c9a96e;background:rgba(201,169,110,0.03);border-radius:8px;cursor:pointer;transition:all 0.2s;';
             row.onmouseover = () => { row.style.background = 'rgba(201,169,110,0.09)'; row.style.borderColor = '#1a1612'; };
             row.onmouseout  = () => { row.style.background = 'rgba(201,169,110,0.03)'; row.style.borderColor = '#c9a96e'; };
-            row.onclick = () => { openGuestPicker(tableId); closeModal('tableSheetModal'); };
+            row.onclick = () => {
+                // openGuestPicker lives in unseated.js and reads from State
+                openGuestPicker(tableId);
+                closeModal('tableSheetModal');
+            };
             row.innerHTML = `
                 <div style="display:flex;align-items:center;gap:8px;flex:1;">
                     <div style="width:18px;height:18px;border-radius:50%;border:1px dashed #c9a96e;display:flex;align-items:center;justify-content:center;font-size:9px;color:#c9a96e;">🪑</div>
@@ -101,6 +117,7 @@ async function openTableSheet(tableId) {
             body.appendChild(row);
         }
     }
+
     openModal('tableSheetModal');
 }
 
@@ -111,20 +128,20 @@ function sheetRemoveMember(memberId) {
             await API.unseatMember(memberId);
             closeModal('confirmDeleteModal');
             closeModal('tableSheetModal');
-            await Promise.all([reloadHall(), reloadUnseated()]);
-        }
+            await updateAppState();
+        },
     );
 }
 
 // ── PDF Export ────────────────────────────────────────────────────────────────
-async function exportToPDF() {
-    const [tablesRes, guestsRes] = await Promise.all([API.getTables(), API.getGuests()]);
-    if (!tablesRes.ok || !guestsRes.ok) { alert('Չհաջողվեց ստ. PDF։'); return; }
 
-    const tables = await tablesRes.json();
-    const guests = await guestsRes.json();
-    tables.sort((a, b) => parseInt(a.table_number) - parseInt(b.table_number));
-    const allMembers = guests.flatMap(g => g.members);
+/**
+ * exportToPDF()
+ * Reads from State.allTables + State.allGuests — no extra fetch.
+ */
+function exportToPDF() {
+    const tables     = [...State.allTables].sort((a, b) => parseInt(a.table_number) - parseInt(b.table_number));
+    const allMembers = State.allGuests.flatMap(g => g.members);
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
@@ -137,6 +154,7 @@ async function exportToPDF() {
         const here = allMembers
             .filter(m => m.table_id === table.id)
             .sort((a, b) => (a.seat_index || 0) - (b.seat_index || 0));
+
         if (!here.length) {
             rows.push([`Sg. ${table.table_number}`, 'Datark', '']);
         } else {
@@ -150,27 +168,30 @@ async function exportToPDF() {
     });
 
     doc.autoTable({
-        startY: 22,
-        head: [['Seghan', 'Ator', 'Anun']],
-        body: rows,
-        theme: 'striped',
-        headStyles: { fillColor: [26, 22, 18], textColor: [232, 213, 176], fontStyle: 'bold' },
-        styles: { font: 'Helvetica', fontSize: 10, cellPadding: 3 },
+        startY:      22,
+        head:        [['Seghan', 'Ator', 'Anun']],
+        body:        rows,
+        theme:       'striped',
+        headStyles:  { fillColor: [26, 22, 18], textColor: [232, 213, 176], fontStyle: 'bold' },
+        styles:      { font: 'Helvetica', fontSize: 10, cellPadding: 3 },
         columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 30 } },
     });
+
     doc.save(`wedding_seating_id_${weddingId}.pdf`);
 }
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
+
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-        if (document.activeElement.id === 'guestName')     { addGuest(); return; }
+        if (document.activeElement.id === 'guestName')      { addGuest();       return; }
         if (document.activeElement.id === 'newTableNumber') { confirmAddTable(); return; }
-        if (document.getElementById('editCapacityModal')?.classList.contains('open'))  { confirmEditCapacity(); return; }
-        if (document.getElementById('renameMemberModal')?.classList.contains('open'))  { document.getElementById('updateConfirmBtn').click(); return; }
+        if (document.getElementById('editCapacityModal')?.classList.contains('open')) { confirmEditCapacity(); return; }
+        if (document.getElementById('renameMemberModal')?.classList.contains('open')) { document.getElementById('updateConfirmBtn').click(); return; }
     }
     if (e.key === 'Escape') {
-        ['addTableModal','seatCountModal','tablePickerModal','guestPickerModal','tableSheetModal',
-         'editCapacityModal','confirmDeleteModal','renameMemberModal','chairActionsModal'].forEach(closeModal);
+        ['addTableModal', 'seatCountModal', 'tablePickerModal', 'guestPickerModal',
+         'tableSheetModal', 'editCapacityModal', 'confirmDeleteModal',
+         'renameMemberModal', 'chairActionsModal'].forEach(closeModal);
     }
 });
