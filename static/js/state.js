@@ -1,42 +1,44 @@
 /**
  * state.js — Shared mutable state + Central Orchestrator
  *
- * ARCHITECTURE: Unidirectional Data Flow
- * ─────────────────────────────────────
+ * ARCHITECTURE: Surgical Updates
+ * ───────────────────────────────
  *  User Action
  *      │
  *      ▼
- *  Mutation (API write)
+ *  Mutation (API write)  ← server response → patch State directly
  *      │
  *      ▼
- *  updateAppState()          ← single entry point for ALL refreshes
- *      │  fetches exactly 1× per endpoint via Promise.all
- *      ▼
- *  State.*  (updated)
+ *  patchState(changes)   ← only update what actually changed
  *      │
  *      ▼
- *  render*Panel() functions  ← pure UI, read State only, never fetch
+ *  render*() functions   ← only re-render affected panels
  *
- * Rule: NO module other than this file may call API.getGuests(),
- *       API.getTables(), or API.getUnseatedMembers().
+ * updateAppState()  — full reload, used ONLY on initial page load.
+ * patchState(changes) — surgical, used after every mutation.
+ *
+ * PATCH RULES (what changed → what to render):
+ *   guests changed  → renderGuestsPanel(), renderUnseatedPanel()
+ *   tables changed  → renderHall()
+ *   both changed    → all three
  */
 
 // ── Shared mutable state ──────────────────────────────────────────────────────
 const State = {
-    // ── Data cache (owned by updateAppState) ──────────────────────────────
-    allGuests:        [],   // Guest[]        — source of truth for all panels
-    allTables:        [],   // Table[]        — source of truth for hall
-    unseatedMembers:  [],   // GuestMember[]  — pre-filtered for unseated panel
+    // ── Data cache ────────────────────────────────────────────────────────
+    allGuests:        [],
+    allTables:        [],
+    unseatedMembers:  [],   // derived — always recomputed from allGuests
 
     // ── Hall / canvas ─────────────────────────────────────────────────────
-    zoomScale:        1.0,
-    isPanning:        false,
-    panStart:         { x: 0, y: 0 },
-    panOffset:        { x: 0, y: 0 },
+    zoomScale:         1.0,
+    isPanning:         false,
+    panStart:          { x: 0, y: 0 },
+    panOffset:         { x: 0, y: 0 },
     activeMovingTable: null,
-    dragOffset:       { x: 0, y: 0 },
-    tablePositions:   {},   // { [tableId]: { x, y } }
-    tableRotations:   {},   // { [tableId]: degrees }
+    dragOffset:        { x: 0, y: 0 },
+    tablePositions:    {},
+    tableRotations:    {},
     currentHallFilter: 'all',
 
     // ── Guest panel ───────────────────────────────────────────────────────
@@ -59,7 +61,7 @@ const State = {
     pendingNewSide:     'mutual',
 
     // ── Edit capacity flow ────────────────────────────────────────────────
-    pendingEditTableId:    null,
+    pendingEditTableId:     null,
     pendingEditCapacityVal: 10,
 };
 
@@ -69,31 +71,140 @@ const TABLE_DEFAULTS = {
     label:    { round: 'Կլոր', rectangle: 'Ուղղ.', double_rectangle: 'Կրկ. Ուղղ.', presidium: 'Պրեզիդիում' },
 };
 
-// ── Central Orchestrator ──────────────────────────────────────────────────────
+// ── Derived state helper ──────────────────────────────────────────────────────
+/**
+ * Recomputes State.unseatedMembers from State.allGuests.
+ * Call this after any guest/member mutation — no extra GET needed.
+ */
+function _recomputeUnseated() {
+    State.unseatedMembers = State.allGuests
+        .flatMap(g => g.members)
+        .filter(m => m.table_id === null);
+}
+
+// ── Surgical patch ────────────────────────────────────────────────────────────
+/**
+ * patchState(changes)
+ *
+ * Apply known changes to State and re-render only what's affected.
+ * Never fetches anything — callers supply the data from server responses.
+ *
+ * @param {Object} changes
+ * @param {Guest[]}  [changes.guests]      — replace State.allGuests
+ * @param {Guest}    [changes.guestAdded]  — push one guest into State.allGuests
+ * @param {number}   [changes.guestRemoved]— remove guest by id
+ * @param {Table[]}  [changes.tables]      — replace State.allTables
+ * @param {Table}    [changes.tableAdded]  — push one table into State.allTables
+ * @param {number}   [changes.tableRemoved]— remove table by id
+ * @param {Table}    [changes.tableUpdated]— replace one table in State.allTables
+ * @param {Object}   [changes.memberSeated]— { memberId, tableId, seatIndex }
+ * @param {Object}   [changes.memberUnseated] — { memberId }
+ * @param {Object}   [changes.memberRenamed]  — { memberId, firstName }
+ */
+function patchState(changes) {
+    let guestsChanged = false;
+    let tablesChanged = false;
+
+    // ── Guests ────────────────────────────────────────────────────────────
+    if (changes.guests !== undefined) {
+        State.allGuests = changes.guests;
+        guestsChanged = true;
+    }
+    if (changes.guestAdded !== undefined) {
+        State.allGuests = [...State.allGuests, changes.guestAdded];
+        guestsChanged = true;
+    }
+    if (changes.guestRemoved !== undefined) {
+        State.allGuests = State.allGuests.filter(g => g.id !== changes.guestRemoved);
+        guestsChanged = true;
+    }
+
+    // ── Tables ────────────────────────────────────────────────────────────
+    if (changes.tables !== undefined) {
+        State.allTables = changes.tables;
+        tablesChanged = true;
+    }
+    if (changes.tableAdded !== undefined) {
+        State.allTables = [...State.allTables, changes.tableAdded];
+        tablesChanged = true;
+    }
+    if (changes.tableRemoved !== undefined) {
+        State.allTables = State.allTables.filter(t => t.id !== changes.tableRemoved);
+        tablesChanged = true;
+    }
+    if (changes.tableUpdated !== undefined) {
+        State.allTables = State.allTables.map(t =>
+            t.id === changes.tableUpdated.id ? changes.tableUpdated : t
+        );
+        tablesChanged = true;
+    }
+
+    // ── Member mutations (patch in-place inside allGuests) ────────────────
+    if (changes.memberSeated !== undefined) {
+        const { memberId, tableId, seatIndex } = changes.memberSeated;
+        State.allGuests = State.allGuests.map(g => ({
+            ...g,
+            members: g.members.map(m =>
+                m.id === memberId ? { ...m, table_id: tableId, seat_index: seatIndex } : m
+            ),
+        }));
+        guestsChanged = true;
+        // Tables also visually change (chair gets occupied)
+        tablesChanged = true;
+    }
+    if (changes.memberUnseated !== undefined) {
+        const { memberId } = changes.memberUnseated;
+        State.allGuests = State.allGuests.map(g => ({
+            ...g,
+            members: g.members.map(m =>
+                m.id === memberId ? { ...m, table_id: null, seat_index: null } : m
+            ),
+        }));
+        guestsChanged = true;
+        tablesChanged = true;
+    }
+    if (changes.memberRenamed !== undefined) {
+        const { memberId, firstName } = changes.memberRenamed;
+        State.allGuests = State.allGuests.map(g => ({
+            ...g,
+            members: g.members.map(m =>
+                m.id === memberId ? { ...m, first_name: firstName } : m
+            ),
+        }));
+        guestsChanged = true;
+        tablesChanged = true;  // chair label changes
+    }
+
+    // ── Recompute derived state ───────────────────────────────────────────
+    if (guestsChanged) _recomputeUnseated();
+
+    // ── Re-render only what changed ───────────────────────────────────────
+    if (guestsChanged) {
+        renderGuestsPanel();
+        renderUnseatedPanel();
+    }
+    if (tablesChanged) {
+        renderHall();
+    }
+}
+
+// ── Full reload (initial load only) ──────────────────────────────────────────
 /**
  * updateAppState()
  *
- * The ONLY function allowed to call data-fetching API endpoints.
- * Fires exactly one request per endpoint, updates State, then
- * re-renders every panel.  Always await this after any mutation.
- *
- * @param {Object} [opts]
- * @param {boolean} [opts.skipHall=false]  — skip hall re-render (e.g. rename-only actions)
+ * Full refetch — called ONCE on page load.
+ * After that, all mutations use patchState() — zero GET requests.
  */
 async function updateAppState({ skipHall = false } = {}) {
-    // ── 1. Fetch all fresh data in parallel (1 request per endpoint) ──────
-    const [guests, tables, unseated] = await Promise.all([
+    const [guests, tables] = await Promise.all([
         API.getGuests(),
         API.getTables(),
-        API.getUnseatedMembers(),
     ]);
 
-    // ── 2. Commit to State ────────────────────────────────────────────────
-    State.allGuests       = guests;
-    State.allTables       = tables;
-    State.unseatedMembers = unseated;
+    State.allGuests = guests;
+    State.allTables = tables;
+    _recomputeUnseated();  // derived from allGuests, no separate endpoint needed
 
-    // ── 3. Drive all UI panels from the now-consistent State ──────────────
     renderGuestsPanel();
     renderUnseatedPanel();
     if (!skipHall) renderHall();

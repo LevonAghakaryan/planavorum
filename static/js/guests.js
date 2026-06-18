@@ -1,19 +1,14 @@
 /**
  * guests.js — Guest list panel: render + mutation handlers.
  *
- * RULE: This file NEVER calls any API.get*() endpoint directly.
- *       It reads State.allGuests and calls updateAppState() after mutations.
+ * RULE: Zero GET requests after mutations.
+ *       Every write uses the server response to patchState() directly.
  *
- * Depends on: api.js, state.js (State + updateAppState), modals.js
+ * Depends on: api.js, state.js (State + patchState), modals.js
  */
 
 // ── Pure UI renderer ──────────────────────────────────────────────────────────
 
-/**
- * renderGuestsPanel()
- * Called by updateAppState() after State has been refreshed.
- * Reads State.allGuests — does not fetch anything.
- */
 function renderGuestsPanel() {
     const container = document.getElementById('guestsContainer');
     if (!container) return;
@@ -69,7 +64,7 @@ function renderGuestsPanel() {
     }
 }
 
-// ── Filter (local — no fetch needed) ─────────────────────────────────────────
+// ── Filter (local — no fetch) ─────────────────────────────────────────────────
 
 function filterMainGuests(side) {
     State.currentMainFilter = side;
@@ -80,10 +75,10 @@ function filterMainGuests(side) {
             ? 'flex-1 py-1.5 text-[11px] font-semibold rounded-lg transition-all bg-[#1a1612] text-[#e8d5b0] shadow-sm'
             : 'flex-1 py-1.5 text-[11px] font-semibold rounded-lg text-[#5c4f3d] hover:bg-[#f7f3ee] transition-all';
     });
-    renderGuestsPanel();  // re-render from State — no fetch
+    renderGuestsPanel();
 }
 
-// ── Mutations (write → updateAppState) ───────────────────────────────────────
+// ── Mutations — surgical, zero GET ───────────────────────────────────────────
 
 async function addGuest() {
     const name  = document.getElementById('guestName').value.trim();
@@ -93,9 +88,11 @@ async function addGuest() {
 
     const res = await API.createGuest(name, count, side);
     if (res.ok) {
+        const newGuest = await res.json();   // server returns full guest + members
         document.getElementById('guestName').value  = '';
         document.getElementById('guestCount').value = 1;
-        await updateAppState();
+        // ✅ No GET — push server response directly into State
+        patchState({ guestAdded: newGuest });
     }
 }
 
@@ -106,7 +103,8 @@ function deleteGuest(id) {
             const res = await API.deleteGuest(id);
             if (res.ok) {
                 closeModal('confirmDeleteModal');
-                await updateAppState();
+                // ✅ No GET — remove from State directly
+                patchState({ guestRemoved: id });
             } else {
                 alert('Չհաջողվեց ջնջել');
             }
@@ -127,13 +125,21 @@ async function mergeSelectedGuests() {
 
     const res = await API.mergeGuests(State.selectedGuestIds, name);
     if (res.ok) {
+        const mergedGuest = await res.json();  // server returns new merged guest + all members
+        const removedIds  = [...State.selectedGuestIds];
+
         State.selectedGuestIds = [];
         document.getElementById('mergeBar').classList.add('hidden');
-        await updateAppState();
+
+        // ✅ No GET — remove old guests, add merged guest
+        // Remove old guests one by one, then add new merged guest
+        let updatedGuests = State.allGuests.filter(g => !removedIds.includes(g.id));
+        updatedGuests = [...updatedGuests, mergedGuest];
+        patchState({ guests: updatedGuests });
     }
 }
 
-// ── Rename shortcut (delegates to modals.js) ──────────────────────────────────
+// ── Rename shortcut ───────────────────────────────────────────────────────────
 
 function quickRenameMember(id, oldName) {
     openRenameModal(id, oldName);

@@ -1,15 +1,13 @@
 /**
  * hall.js — Hall canvas: render + drag/drop + zoom/pan + mutations.
  *
- * RULE: This file NEVER calls API.getGuests(), API.getTables(), or
- *       API.getUnseatedMembers() directly.
- *       renderHall() reads State.allGuests + State.allTables.
- *       All mutations call updateAppState() when done.
+ * RULE: Zero GET requests after mutations.
+ *       Every write uses the server response to patchState() directly.
  *
- * Depends on: api.js, state.js (State + updateAppState), modals.js
+ * Depends on: api.js, state.js (State + patchState), modals.js
  */
 
-// ── Position save (debounce per table + bulk on demand) ───────────────────────
+// ── Position save ─────────────────────────────────────────────────────────────
 
 let _saveTimer = null;
 
@@ -24,6 +22,7 @@ function scheduleSave(tableId) {
 async function _savePositionSilent(tableId, x, y) {
     const res = await API.updateTablePosition(tableId, x, y);
     if (res.ok) showSaveIndicator();
+    // Position is already in State.tablePositions — no patchState needed
 }
 
 async function saveAllPositions() {
@@ -119,7 +118,7 @@ document.addEventListener('mouseup', () => {
     }
 });
 
-// ── Hall side filter (local — re-renders DOM attributes, no fetch) ────────────
+// ── Hall side filter ──────────────────────────────────────────────────────────
 
 function filterHall(side) {
     State.currentHallFilter = side;
@@ -173,8 +172,8 @@ function getChairPosition(category, i, total, dim) {
     }
     const half    = Math.ceil(total / 2);
     const spacing = w / (half + 1);
-    if (i < half) return { x: spacing * (i + 1),          y: -16 };
-    return             { x: spacing * (i - half + 1),     y: h + 16 };
+    if (i < half) return { x: spacing * (i + 1),      y: -16 };
+    return             { x: spacing * (i - half + 1), y: h + 16 };
 }
 
 // ── Rotate ────────────────────────────────────────────────────────────────────
@@ -313,17 +312,14 @@ function buildTableElement(table, allMembers) {
         State.dragOffset.y = (e.clientY - wrapRect.top)  / State.zoomScale - parseFloat(tDiv.style.top  || 0);
     });
 
-    // ── Table as drop target (drop whole member onto table body) ──
+    // ── Table as drop target ──
     tDiv.addEventListener('dragover',  (e) => { e.preventDefault(); e.stopPropagation(); tDiv.classList.add('drag-over'); });
     tDiv.addEventListener('dragleave', (e) => { if (!tDiv.contains(e.relatedTarget)) tDiv.classList.remove('drag-over'); });
     tDiv.addEventListener('drop', async (e) => {
         e.preventDefault(); e.stopPropagation();
         tDiv.classList.remove('drag-over');
         const memberId = e.dataTransfer.getData('text/plain');
-        if (memberId) {
-            await seatMemberOnTable(parseInt(memberId), table.id);
-            await updateAppState();
-        }
+        if (memberId) await seatMemberOnTable(parseInt(memberId), table.id);
     });
 
     return tDiv;
@@ -331,11 +327,6 @@ function buildTableElement(table, allMembers) {
 
 // ── Pure UI renderer ──────────────────────────────────────────────────────────
 
-/**
- * renderHall()
- * Called by updateAppState() after State has been refreshed.
- * Reads State.allTables + State.allGuests — does not fetch anything.
- */
 function renderHall() {
     const wrapper = document.getElementById('zoomWrapper');
     if (!wrapper) return;
@@ -344,7 +335,6 @@ function renderHall() {
     const allMembers = State.allGuests.flatMap(g => g.members);
 
     State.allTables.forEach((table, index) => {
-        // Preserve existing positions across re-renders; fall back to auto-layout
         if (State.tablePositions[table.id] === undefined) {
             State.tablePositions[table.id] = {
                 x: table.x_pos != null ? table.x_pos : 60 + (index % 3) * 300,
@@ -357,10 +347,9 @@ function renderHall() {
     filterHall(State.currentHallFilter);
 }
 
-// Legacy alias so manage.html init block keeps working
 const loadTables = () => updateAppState();
 
-// ── Seat on a specific chair ──────────────────────────────────────────────────
+// ── Seat on specific chair ────────────────────────────────────────────────────
 
 async function seatMemberOnChair(memberId, tableId, seatIndex) {
     const res = await API.seatMember(memberId, tableId, seatIndex);
@@ -369,14 +358,12 @@ async function seatMemberOnChair(memberId, tableId, seatIndex) {
         alert(err.detail || 'Ազատ տեղ չկա կամ սխալ կատարվեց');
         return;
     }
-    await updateAppState();
+    // ✅ No GET — patch State directly
+    patchState({ memberSeated: { memberId, tableId, seatIndex } });
 }
 
-// ── Guest picker for a specific empty chair ───────────────────────────────────
+// ── Guest picker for empty chair ──────────────────────────────────────────────
 
-/**
- * Reads State.allGuests + State.unseatedMembers — no fetch.
- */
 function openGuestPickerForSeat(tableId, seatIndex) {
     State.pendingSeatTableId = tableId;
     State.pendingSeatIndex   = seatIndex;
@@ -415,7 +402,7 @@ function openGuestPickerForSeat(tableId, seatIndex) {
     openModal('guestPickerModal');
 }
 
-// ── Manage seated member (click occupied chair) ───────────────────────────────
+// ── Manage seated member ──────────────────────────────────────────────────────
 
 function manageSeatedMember(member) {
     document.getElementById('chairActionsTitle').innerText = member.first_name || 'Անանուն հյուր';
@@ -428,13 +415,58 @@ function manageSeatedMember(member) {
         showConfirmDelete(
             `«${member.first_name || 'Անանուն'}» — հեռ.?`,
             async () => {
-                await API.unseatMember(member.id);
-                closeModal('confirmDeleteModal');
-                await updateAppState();
+                const res = await API.unseatMember(member.id);
+                if (res.ok) {
+                    closeModal('confirmDeleteModal');
+                    // ✅ No GET
+                    patchState({ memberUnseated: { memberId: member.id } });
+                }
             },
         );
     };
     openModal('chairActionsModal');
+}
+
+// ── Seat helper (used by unseated.js drag-drop) ───────────────────────────────
+
+/**
+ * Find next free seat_index from State (no fetch).
+ */
+function findNextFreeSeatFromState(tableId) {
+    const table = State.allTables.find(t => t.id === tableId);
+    if (!table) return null;
+
+    const allMembers = State.allGuests.flatMap(g => g.members);
+    const occupied   = new Set(
+        allMembers
+            .filter(m => m.table_id === tableId && m.seat_index != null)
+            .map(m => m.seat_index),
+    );
+    for (let i = 0; i < table.capacity; i++) {
+        if (!occupied.has(i)) return i;
+    }
+    return null;
+}
+
+/**
+ * Seat a member on a table, auto-assigning next free seat.
+ * ✅ No GET — patches State from server response.
+ */
+async function seatMemberOnTable(memberId, tableId) {
+    const seatIndex = findNextFreeSeatFromState(tableId);
+    if (seatIndex === null) {
+        alert('Ազատ տեղ չկա։');
+        return false;
+    }
+    const res = await API.seatMember(memberId, tableId, seatIndex);
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || 'Սխալ');
+        return false;
+    }
+    // ✅ No GET — patch State directly
+    patchState({ memberSeated: { memberId, tableId, seatIndex } });
+    return true;
 }
 
 // ── Add table flow ────────────────────────────────────────────────────────────
@@ -478,10 +510,13 @@ function changeNewCapacity(delta) {
 async function confirmAddTable() {
     const num = document.getElementById('newTableNumber').value.trim();
     if (!num) { document.getElementById('newTableNumber').focus(); return; }
+
     const res = await API.createTable(num, State.pendingNewCategory, State.pendingNewCapacity, State.pendingNewSide);
     if (res.ok) {
+        const newTable = await res.json();  // server returns full table object
         closeModal('addTableModal');
-        await updateAppState();
+        // ✅ No GET — push server response directly into State
+        patchState({ tableAdded: newTable });
     }
 }
 
@@ -502,8 +537,10 @@ function changeEditCapacity(delta) {
 async function confirmEditCapacity() {
     const res = await API.updateTableCapacity(State.pendingEditTableId, State.pendingEditCapacityVal);
     if (res.ok) {
+        const updatedTable = await res.json();  // server returns updated table
         closeModal('editCapacityModal');
-        await updateAppState();
+        // ✅ No GET — replace table in State
+        patchState({ tableUpdated: updatedTable });
     } else {
         const err = await res.json().catch(() => ({}));
         alert(err.detail || 'Սխալ կատարվեց');
@@ -516,12 +553,29 @@ function deleteTable(id) {
     showConfirmDelete(
         'Ջնջե՞լ սեղանը։ Բոլոր հյուրերը կազատվեն։',
         async () => {
-            await API.deleteTable(id);
-            delete State.tablePositions[id];
-            closeModal('confirmDeleteModal');
-            await updateAppState();
+            const res = await API.deleteTable(id);
+            if (res.ok) {
+                delete State.tablePositions[id];
+                closeModal('confirmDeleteModal');
+                // ✅ No GET — remove table + unseat its members from State
+                _unseatMembersOfTable(id);
+                patchState({ tableRemoved: id });
+            }
         },
     );
+}
+
+/**
+ * When a table is deleted, its members become unseated.
+ * Patch allGuests in-place before calling patchState.
+ */
+function _unseatMembersOfTable(tableId) {
+    State.allGuests = State.allGuests.map(g => ({
+        ...g,
+        members: g.members.map(m =>
+            m.table_id === tableId ? { ...m, table_id: null, seat_index: null } : m
+        ),
+    }));
 }
 
 // ── Dropdown menu ─────────────────────────────────────────────────────────────
