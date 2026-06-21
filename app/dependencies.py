@@ -4,16 +4,45 @@ app/dependencies.py
 
 import secrets
 from typing import Optional
-
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi import Depends, Header, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from core.database import get_db
+from core.config import settings
 from app.repositories.wedding   import WeddingRepository
 from app.services.wedding       import WeddingService
 from app.services.table         import TableService
 from app.services.guest         import GuestService
 from app.services.guest_members import GuestMemberService
+
+# ── Admin Basic Auth ──────────────────────────────────────────────────────────
+
+_basic = HTTPBasic(auto_error=False)
+
+
+def verify_admin(
+        credentials: Optional[HTTPBasicCredentials] = Depends(_basic),
+) -> bool:
+    """
+    HTTP Basic Auth — admin-only endpoint-երի համար։
+    Credentials-ը գալիս են .env-ից (admin_user, admin_password)։
+    """
+    if credentials is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Պահ. auth",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    ok_user = secrets.compare_digest(credentials.username, settings.admin_user)
+    ok_pass = secrets.compare_digest(credentials.password, settings.admin_password)
+    if not (ok_user and ok_pass):
+        raise HTTPException(
+            status_code=401,
+            detail="Սխ. user/pass",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return True
 
 
 # ── Token verification ────────────────────────────────────────────────────────

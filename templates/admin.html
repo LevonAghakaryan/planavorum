@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="hy">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planavorum — Admin</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'DM Sans', sans-serif; }
+        .font-cormorant { font-family: 'Cormorant Garamond', serif; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #c9a96e; border-radius: 10px; }
+        input:focus { outline: none; }
+        button:focus { outline: none; }
+
+        /* Login */
+        #loginScreen { transition: opacity 0.3s; }
+
+        /* Panel fade-in */
+        #adminPanel { display: none; }
+        #adminPanel.visible { display: flex; }
+
+        /* Toast */
+        #toast {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            background: #1a1612; color: #e8d5b0;
+            padding: 10px 20px; border-radius: 10px; font-size: 13px;
+            opacity: 0; transition: opacity 0.25s; pointer-events: none; z-index: 999;
+            white-space: nowrap;
+        }
+        #toast.show { opacity: 1; }
+
+        /* Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(26,22,18,0.6); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 200; }
+        .modal-overlay.open { display: flex; }
+
+        /* Row hover */
+        .wedding-row:hover { background: #fdf9f4; }
+        .wedding-row { transition: background 0.15s; }
+    </style>
+</head>
+<body class="bg-[#f7f3ee] min-h-screen">
+
+<!-- ══ LOGIN SCREEN ══════════════════════════════════════════════════════════ -->
+<div id="loginScreen" class="min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-sm">
+        <div class="text-center mb-8">
+            <div class="font-cormorant text-4xl font-bold text-[#1a1612] mb-1">Planavorum</div>
+            <div class="text-[#8c7b66] text-sm">Ադմինի մուտք</div>
+        </div>
+        <div class="bg-white rounded-2xl border border-[#e8ddd0] shadow-lg p-8 space-y-4">
+            <div>
+                <label class="block text-[11px] font-semibold text-[#8c7b66] uppercase tracking-wider mb-1.5">Օգտ. անուն</label>
+                <input id="loginUser" type="text" placeholder="admin"
+                    class="w-full px-4 py-3 rounded-xl border border-[#e8ddd0] bg-[#fdfaf6] text-sm text-[#1a1612] focus:border-[#c9a96e] transition-colors">
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold text-[#8c7b66] uppercase tracking-wider mb-1.5">Գաղտնաբառ</label>
+                <input id="loginPass" type="password" placeholder="••••••••"
+                    class="w-full px-4 py-3 rounded-xl border border-[#e8ddd0] bg-[#fdfaf6] text-sm text-[#1a1612] focus:border-[#c9a96e] transition-colors">
+            </div>
+            <div id="loginError" class="hidden text-[12px] text-[#c4736a] text-center bg-[#c4736a]/10 rounded-xl py-2">
+                Սխալ մուտքանուն կամ գաղտնաբառ
+            </div>
+            <button onclick="doLogin()"
+                class="w-full py-3 bg-[#1a1612] text-[#e8d5b0] rounded-xl text-sm font-semibold hover:bg-[#3d3228] transition-colors cursor-pointer">
+                Մուտք →
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ ADMIN PANEL ══════════════════════════════════════════════════════════ -->
+<div id="adminPanel" class="flex-col min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-[#1a1612] h-14 flex items-center justify-between px-6 flex-shrink-0 sticky top-0 z-50">
+        <div class="font-cormorant text-[#e8d5b0] text-xl font-semibold tracking-wide">Planavorum Admin 💍</div>
+        <button onclick="doLogout()" class="text-[#8c7b66] hover:text-[#e8d5b0] text-xs transition-colors">Ելք →</button>
+    </header>
+
+    <!-- Body -->
+    <main class="max-w-4xl mx-auto px-4 py-8 w-full">
+
+        <!-- Top bar -->
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h2 class="font-cormorant text-2xl font-bold text-[#1a1612]">Հարսանիքներ</h2>
+                <p id="weddingCount" class="text-[#8c7b66] text-xs mt-0.5">Բեռնվում է...</p>
+            </div>
+            <button onclick="openCreateModal()"
+                class="flex items-center gap-2 bg-[#1a1612] text-[#e8d5b0] px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#3d3228] transition-colors cursor-pointer">
+                ＋ Ստ. Հարս.
+            </button>
+        </div>
+
+        <!-- Weddings table -->
+        <div class="bg-white rounded-2xl border border-[#e8ddd0] shadow-sm overflow-hidden">
+            <!-- Table header -->
+            <div class="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-5 py-3 border-b border-[#f0eae2] bg-[#fdfaf6]">
+                <div class="text-[10px] font-bold text-[#8c7b66] uppercase tracking-wider">Անվանում</div>
+                <div class="text-[10px] font-bold text-[#8c7b66] uppercase tracking-wider">Ստ. ամ.</div>
+                <div class="text-[10px] font-bold text-[#8c7b66] uppercase tracking-wider text-center">URL</div>
+                <div class="text-[10px] font-bold text-[#8c7b66] uppercase tracking-wider text-center">Գործ.</div>
+            </div>
+            <!-- Rows -->
+            <div id="weddingRows">
+                <div class="px-5 py-8 text-center text-[#8c7b66] text-sm italic">Բեռնվում է...</div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- ══ CREATE / EDIT MODAL ══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="weddingModal" onclick="closeModal()">
+    <div class="bg-[#fdfaf6] rounded-2xl w-96 shadow-2xl border border-[#e8ddd0] overflow-hidden" onclick="event.stopPropagation()">
+        <div class="px-5 py-4 border-b border-[#e8ddd0] flex justify-between items-center">
+            <span id="modalTitle" class="font-cormorant text-lg font-semibold">Նոր հարսանիք</span>
+            <button onclick="closeModal()" class="text-[#8c7b66] hover:text-[#1a1612] text-xl cursor-pointer">✕</button>
+        </div>
+        <div class="p-5 space-y-4">
+            <div>
+                <label class="block text-[11px] font-semibold text-[#8c7b66] uppercase tracking-wider mb-1.5">Անվանում</label>
+                <input id="modalTitle_input" type="text" placeholder="Օր.՝ Արամ և Աննա"
+                    class="w-full px-4 py-2.5 rounded-xl border border-[#e8ddd0] bg-white text-sm text-[#1a1612] focus:border-[#c9a96e] transition-colors">
+            </div>
+            <div id="modalError" class="hidden text-[12px] text-[#c4736a] text-center bg-[#c4736a]/10 rounded-xl py-2"></div>
+            <button id="modalConfirmBtn" onclick="submitModal()"
+                class="w-full py-3 bg-[#1a1612] text-[#e8d5b0] rounded-xl text-sm font-semibold hover:bg-[#3d3228] transition-colors cursor-pointer">
+                Ստ. ✓
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ CONFIRM DELETE MODAL ══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="deleteModal" onclick="closeDeleteModal()">
+    <div class="bg-[#fdfaf6] rounded-2xl w-80 shadow-2xl border border-[#e8ddd0] overflow-hidden" onclick="event.stopPropagation()">
+        <div class="p-6 text-center">
+            <div class="w-12 h-12 rounded-full bg-[#c4736a]/10 text-[#c4736a] flex items-center justify-center text-2xl mx-auto mb-3">🗑</div>
+            <h3 class="font-cormorant text-lg font-bold mb-1">Ջնջե՞լ</h3>
+            <p id="deleteText" class="text-[12px] text-[#8c7b66] mb-5">Անդ. է</p>
+            <div class="flex gap-2">
+                <button onclick="closeDeleteModal()" class="flex-1 py-2.5 rounded-xl border border-[#e8ddd0] text-sm font-semibold text-[#5c4f3d] bg-white hover:bg-[#f7f3ee] cursor-pointer">Չ.</button>
+                <button id="deleteConfirmBtn" class="flex-1 py-2.5 rounded-xl bg-[#c4736a] text-white text-sm font-semibold hover:bg-[#b06059] cursor-pointer">Ջնջ.</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ── Auth ──────────────────────────────────────────────────────────────────────
+// Credentials are checked against the backend via HTTP Basic Auth header.
+// We store them in memory only (sessionStorage for page refresh).
+
+let authHeader = sessionStorage.getItem('planavorum_auth') || null;
+
+function doLogin() {
+    const user = document.getElementById('loginUser').value.trim();
+    const pass = document.getElementById('loginPass').value;
+    if (!user || !pass) return;
+    authHeader = 'Basic ' + btoa(user + ':' + pass);
+    // Verify immediately
+    verifyAndLoad();
+}
+
+async function verifyAndLoad() {
+    // Use the weddings list endpoint to verify credentials
+    const res = await fetch('/api/v1/weddings/list', {
+        headers: { 'Authorization': authHeader }
+    });
+    if (res.status === 401 || res.status === 403) {
+        authHeader = null;
+        sessionStorage.removeItem('planavorum_auth');
+        document.getElementById('loginError').classList.remove('hidden');
+        return;
+    }
+    // Success
+    sessionStorage.setItem('planavorum_auth', authHeader);
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('adminPanel').classList.add('visible');
+    document.getElementById('loginError').classList.add('hidden');
+    const data = await res.json();
+    renderWeddings(data);
+}
+
+function doLogout() {
+    authHeader = null;
+    sessionStorage.removeItem('planavorum_auth');
+    document.getElementById('adminPanel').classList.remove('visible');
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('loginUser').value = '';
+    document.getElementById('loginPass').value = '';
+}
+
+// Auto-login if session exists
+window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('loginPass').addEventListener('keydown', e => {
+        if (e.key === 'Enter') doLogin();
+    });
+    document.getElementById('loginUser').addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('loginPass').focus();
+    });
+    if (authHeader) verifyAndLoad();
+});
+
+// ── Fetch helpers ──────────────────────────────────────────────────────────────
+async function apiFetch(url, opts = {}) {
+    opts.headers = { ...(opts.headers || {}), 'Authorization': authHeader };
+    return fetch(url, opts);
+}
+
+// ── Wedding list ──────────────────────────────────────────────────────────────
+let allWeddings = [];
+
+function renderWeddings(weddings) {
+    allWeddings = weddings;
+    const container = document.getElementById('weddingRows');
+    document.getElementById('weddingCount').innerText = `${weddings.length} հարսանիք`;
+
+    if (!weddings.length) {
+        container.innerHTML = '<div class="px-5 py-10 text-center text-[#8c7b66] text-sm italic">Հարսանիք չկա — ստ. առաջինը ↑</div>';
+        return;
+    }
+
+    container.innerHTML = '';
+    weddings.forEach(w => {
+        const manageUrl = `${location.origin}/wedding/${w.slug}/${w.token}/manage`;
+        const date = new Date(w.created_at).toLocaleDateString('hy-AM', { day:'2-digit', month:'short', year:'numeric' });
+
+        const row = document.createElement('div');
+        row.className = 'wedding-row grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-5 py-4 border-b border-[#f7f3ee] last:border-0';
+        row.innerHTML = `
+            <div>
+                <div class="text-sm font-semibold text-[#1a1612]">${escHtml(w.title)}</div>
+                <div class="text-[10px] text-[#8c7b66] mt-0.5 font-mono">${w.slug}</div>
+            </div>
+            <div class="text-xs text-[#8c7b66] whitespace-nowrap">${date}</div>
+            <div class="flex gap-1.5">
+                <button onclick="copyUrl('${escAttr(manageUrl)}')"
+                    title="Պատ. URL"
+                    class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#e8ddd0] bg-white text-[11px] font-medium text-[#5c4f3d] hover:border-[#c9a96e] hover:bg-[#c9a96e]/5 transition-all cursor-pointer">
+                    🔗 Պատ.
+                </button>
+                <a href="${escAttr(manageUrl)}" target="_blank"
+                    class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#e8ddd0] bg-white text-[11px] font-medium text-[#5c4f3d] hover:border-[#7a9e7e] hover:bg-[#7a9e7e]/5 transition-all no-underline">
+                    ↗ Բ.
+                </a>
+            </div>
+            <div class="flex gap-1.5">
+                <button onclick="openEditModal(${w.id}, '${escAttr(w.title)}')"
+                    title="Խ."
+                    class="w-8 h-8 flex items-center justify-center rounded-lg border border-[#e8ddd0] bg-white text-sm hover:border-[#c9a96e] transition-all cursor-pointer">✏️</button>
+                <button onclick="openDeleteModal(${w.id}, '${escAttr(w.title)}')"
+                    title="Ջ."
+                    class="w-8 h-8 flex items-center justify-center rounded-lg border border-[#e8ddd0] bg-white text-sm hover:border-[#c4736a] hover:text-[#c4736a] transition-all cursor-pointer">🗑</button>
+            </div>`;
+        container.appendChild(row);
+    });
+}
+
+// ── Create modal ──────────────────────────────────────────────────────────────
+let modalMode = 'create'; // 'create' | 'edit'
+let modalEditId = null;
+
+function openCreateModal() {
+    modalMode = 'create'; modalEditId = null;
+    document.getElementById('modalTitle').innerText = 'Նոր հարսանիք';
+    document.getElementById('modalTitle_input').value = '';
+    document.getElementById('modalConfirmBtn').innerText = 'Ստ. ✓';
+    document.getElementById('modalError').classList.add('hidden');
+    document.getElementById('weddingModal').classList.add('open');
+    setTimeout(() => document.getElementById('modalTitle_input').focus(), 80);
+}
+
+function openEditModal(id, title) {
+    modalMode = 'edit'; modalEditId = id;
+    document.getElementById('modalTitle').innerText = 'Փոփ. անուն';
+    document.getElementById('modalTitle_input').value = title;
+    document.getElementById('modalConfirmBtn').innerText = 'Պահ. ✓';
+    document.getElementById('modalError').classList.add('hidden');
+    document.getElementById('weddingModal').classList.add('open');
+    setTimeout(() => document.getElementById('modalTitle_input').focus(), 80);
+}
+
+function closeModal() {
+    document.getElementById('weddingModal').classList.remove('open');
+}
+
+async function submitModal() {
+    const title = document.getElementById('modalTitle_input').value.trim();
+    if (!title) { document.getElementById('modalTitle_input').focus(); return; }
+
+    const errEl = document.getElementById('modalError');
+    errEl.classList.add('hidden');
+
+    if (modalMode === 'create') {
+        const res = await apiFetch('/api/v1/weddings/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title }),
+        });
+        if (!res.ok) {
+            const e = await res.json().catch(() => ({}));
+            errEl.innerText = e.detail || 'Ստ. Սխ.';
+            errEl.classList.remove('hidden');
+            return;
+        }
+        const newW = await res.json();
+        allWeddings = [newW, ...allWeddings];
+        renderWeddings(allWeddings);
+        closeModal();
+        showToast('✓ Ստ. ' + newW.title);
+    } else {
+        // Edit — no generic PUT endpoint exists yet; we do a targeted title update.
+        // Since the backend only has POST /weddings/ and GET /{id}, we'll
+        // communicate via a PATCH-like approach. For now, show a note.
+        // TODO: add PUT /api/v1/weddings/{id} to backend
+        const res = await apiFetch(`/api/v1/weddings/${modalEditId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title }),
+        });
+        if (!res.ok) {
+            errEl.innerText = 'Փ. Անհ. — ավ. PUT /weddings/{id} backend-ում';
+            errEl.classList.remove('hidden');
+            return;
+        }
+        const updated = await res.json();
+        allWeddings = allWeddings.map(w => w.id === modalEditId ? updated : w);
+        renderWeddings(allWeddings);
+        closeModal();
+        showToast('✓ Փ. ' + updated.title);
+    }
+}
+
+// ── Delete modal ──────────────────────────────────────────────────────────────
+function openDeleteModal(id, title) {
+    document.getElementById('deleteText').innerText = `«${title}» — բոլ. հյ. ու սեղ. կջնջ.`;
+    document.getElementById('deleteModal').classList.add('open');
+    document.getElementById('deleteConfirmBtn').onclick = () => confirmDelete(id, title);
+}
+function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.remove('open');
+}
+async function confirmDelete(id, title) {
+    const res = await apiFetch(`/api/v1/weddings/${id}`, { method: 'DELETE' });
+    if (res.ok || res.status === 404) {
+        allWeddings = allWeddings.filter(w => w.id !== id);
+        renderWeddings(allWeddings);
+        closeDeleteModal();
+        showToast('🗑 Ջնջ. ' + title);
+    } else {
+        const e = await res.json().catch(() => ({}));
+        alert(e.detail || 'Ջ. Սխ.');
+    }
+}
+
+// ── Copy URL ──────────────────────────────────────────────────────────────────
+async function copyUrl(url) {
+    try {
+        await navigator.clipboard.writeText(url);
+        showToast('✓ URL պատ.');
+    } catch {
+        prompt('Պատ. URL:', url);
+    }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let _toastTimer = null;
+function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.innerText = msg;
+    el.classList.add('show');
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ── Keyboard ──────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeModal(); closeDeleteModal(); }
+    if (e.key === 'Enter' && document.getElementById('weddingModal').classList.contains('open')) submitModal();
+});
+
+// ── Utils ──────────────────────────────────────────────────────────────────────
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s) { return s.replace(/'/g,'&apos;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>

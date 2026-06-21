@@ -10,6 +10,10 @@ class WeddingCreate(WeddingBase):
     pass
 
 
+class WeddingUpdate(BaseModel):
+    title: str
+
+
 class WeddingResponse(WeddingBase):
     id:         int
     slug:       str

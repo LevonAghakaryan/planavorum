@@ -12,7 +12,7 @@ templates = Jinja2Templates(directory="templates")
 
 @router.get("/", response_class=HTMLResponse)
 def get_home_page(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("admin.html", {"request": request})
 
 
 def _get_wedding_or_raise(slug: str, token: str, db: Session):
