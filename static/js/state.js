@@ -117,6 +117,10 @@ function patchState(changes) {
     if (changes.guestRemoved !== undefined) {
         State.allGuests = State.allGuests.filter(g => g.id !== changes.guestRemoved);
         guestsChanged = true;
+        // ✅ ՈՒՂՂՈՒՄ. ջնջված հրավերի անդամները կարող էին նստած լինել սեղանի մոտ —
+        // առանց այս դրոշակի, սրահը (հյուրասենյակը) չէր վերա-ռենդերվում, և աթոռները
+        // տեսողականորեն մնում էին զբաղված մինչև էջի ռեֆրեշ։
+        tablesChanged = true;
     }
 
     // ── Tables ────────────────────────────────────────────────────────────

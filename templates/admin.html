@@ -51,23 +51,23 @@
             <div class="text-[#8c7b66] text-sm">Ադմինի մուտք</div>
         </div>
         <div class="bg-white rounded-2xl border border-[#e8ddd0] shadow-lg p-8 space-y-4">
-            <div>
-                <label class="block text-[11px] font-semibold text-[#8c7b66] uppercase tracking-wider mb-1.5">Օգտ. անուն</label>
-                <input id="loginUser" type="text" placeholder="admin"
-                    class="w-full px-4 py-3 rounded-xl border border-[#e8ddd0] bg-[#fdfaf6] text-sm text-[#1a1612] focus:border-[#c9a96e] transition-colors">
-            </div>
-            <div>
-                <label class="block text-[11px] font-semibold text-[#8c7b66] uppercase tracking-wider mb-1.5">Գաղտնաբառ</label>
-                <input id="loginPass" type="password" placeholder="••••••••"
-                    class="w-full px-4 py-3 rounded-xl border border-[#e8ddd0] bg-[#fdfaf6] text-sm text-[#1a1612] focus:border-[#c9a96e] transition-colors">
-            </div>
-            <div id="loginError" class="hidden text-[12px] text-[#c4736a] text-center bg-[#c4736a]/10 rounded-xl py-2">
-                Սխալ մուտքանուն կամ գաղտնաբառ
-            </div>
-            <button onclick="doLogin()"
-                class="w-full py-3 bg-[#1a1612] text-[#e8d5b0] rounded-xl text-sm font-semibold hover:bg-[#3d3228] transition-colors cursor-pointer">
-                Մուտք →
-            </button>
+            <form onsubmit="event.preventDefault(); doLogin();" autocomplete="off">
+                <div class="mb-4">
+                    <label class="block text-[11px] font-semibold text-[#8c7b66] uppercase tracking-wider mb-1.5">Մուտքանուն</label>
+                    <input id="loginUser" type="text" name="loginUser" placeholder="Մուտքանուն" autocomplete="off"
+                        class="w-full px-4 py-3 rounded-xl border border-[#e8ddd0] bg-[#fdfaf6] text-sm text-[#1a1612] focus:border-[#c9a96e] transition-colors">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-[11px] font-semibold text-[#8c7b66] uppercase tracking-wider mb-1.5">Գաղտնաբառ</label>
+                    <input id="loginPass" type="password" name="loginPass" placeholder="Գաղտնաբառ" autocomplete="off"
+                        class="w-full px-4 py-3 rounded-xl border border-[#e8ddd0] bg-[#fdfaf6] text-sm text-[#1a1612] focus:border-[#c9a96e] transition-colors">
+                </div>
+                <div id="loginError" class="hidden text-[12px] text-[#c4736a] text-center bg-[#c4736a]/10 rounded-xl py-2 mb-4"></div>
+                <button type="submit"
+                    class="w-full py-3 bg-[#1a1612] text-[#e8d5b0] rounded-xl text-sm font-semibold hover:bg-[#3d3228] transition-colors cursor-pointer">
+                    Մուտք →
+                </button>
+            </form>
         </div>
     </div>
 </div>
@@ -155,9 +155,6 @@
 
 <script>
 // ── Auth ──────────────────────────────────────────────────────────────────────
-// Credentials are checked against the backend via HTTP Basic Auth header.
-// We store them in memory only (sessionStorage for page refresh).
-
 let authHeader = sessionStorage.getItem('planavorum_auth') || null;
 
 function doLogin() {
@@ -165,19 +162,20 @@ function doLogin() {
     const pass = document.getElementById('loginPass').value;
     if (!user || !pass) return;
     authHeader = 'Basic ' + btoa(user + ':' + pass);
-    // Verify immediately
     verifyAndLoad();
 }
 
 async function verifyAndLoad() {
-    // Use the weddings list endpoint to verify credentials
     const res = await fetch('/api/v1/weddings/list', {
         headers: { 'Authorization': authHeader }
     });
     if (res.status === 401 || res.status === 403) {
         authHeader = null;
         sessionStorage.removeItem('planavorum_auth');
-        document.getElementById('loginError').classList.remove('hidden');
+        const err = await res.json().catch(() => ({}));
+        const errEl = document.getElementById('loginError');
+        errEl.innerText = err.detail || 'Սխալ մուտքանուն կամ գաղտնաբառ';
+        errEl.classList.remove('hidden');
         return;
     }
     // Success
@@ -200,12 +198,6 @@ function doLogout() {
 
 // Auto-login if session exists
 window.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('loginPass').addEventListener('keydown', e => {
-        if (e.key === 'Enter') doLogin();
-    });
-    document.getElementById('loginUser').addEventListener('keydown', e => {
-        if (e.key === 'Enter') document.getElementById('loginPass').focus();
-    });
     if (authHeader) verifyAndLoad();
 });
 
@@ -265,7 +257,7 @@ function renderWeddings(weddings) {
 }
 
 // ── Create modal ──────────────────────────────────────────────────────────────
-let modalMode = 'create'; // 'create' | 'edit'
+let modalMode = 'create';
 let modalEditId = null;
 
 function openCreateModal() {
@@ -317,17 +309,14 @@ async function submitModal() {
         closeModal();
         showToast('✓ Ստ. ' + newW.title);
     } else {
-        // Edit — no generic PUT endpoint exists yet; we do a targeted title update.
-        // Since the backend only has POST /weddings/ and GET /{id}, we'll
-        // communicate via a PATCH-like approach. For now, show a note.
-        // TODO: add PUT /api/v1/weddings/{id} to backend
         const res = await apiFetch(`/api/v1/weddings/${modalEditId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title }),
         });
         if (!res.ok) {
-            errEl.innerText = 'Փ. Անհ. — ավ. PUT /weddings/{id} backend-ում';
+            const e = await res.json().catch(() => ({}));
+            errEl.innerText = e.detail || 'Փ. Անհ.';
             errEl.classList.remove('hidden');
             return;
         }

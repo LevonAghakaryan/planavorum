@@ -27,21 +27,33 @@ def verify_admin(
     """
     HTTP Basic Auth — admin-only endpoint-երի համար։
     Credentials-ը գալիս են .env-ից (admin_user, admin_password)։
+
+    ԿԱՐևՈՐ. այստեղ դիտավորյալ ՈՉ ՄԻ HTTPException-ում WWW-Authenticate
+    header չենք ուղարկում։ Հենց այդ header-ն է, որ browser-ին ստիպում է
+    իր native login popup-ը ցույց տալ (և դրա հետևից՝ "պահպանել գաղտնաբառը"
+    հարցումը)։ Առանց դրա՝ browser-ը ոչինչ չի popup անում, և ամբողջ
+    error handling-ը մնում է մեր JS-ի վերահսկողության տակ։
     """
     if credentials is None:
         raise HTTPException(
             status_code=401,
-            detail="Պահ. auth",
-            headers={"WWW-Authenticate": "Basic"},
+            detail="Մուտքանուն և գաղտնաբառ պարտադիր են",
         )
+
     ok_user = secrets.compare_digest(credentials.username, settings.admin_user)
-    ok_pass = secrets.compare_digest(credentials.password, settings.admin_password)
-    if not (ok_user and ok_pass):
+    if not ok_user:
         raise HTTPException(
             status_code=401,
-            detail="Սխ. user/pass",
-            headers={"WWW-Authenticate": "Basic"},
+            detail="Սխալ մուտքանուն",
         )
+
+    ok_pass = secrets.compare_digest(credentials.password, settings.admin_password)
+    if not ok_pass:
+        raise HTTPException(
+            status_code=401,
+            detail="Սխալ գաղտնաբառ",
+        )
+
     return True
 
 

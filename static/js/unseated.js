@@ -78,10 +78,16 @@ function renderUnseatedPanel() {
                 row.addEventListener('dragend', () => { row.style.opacity = '1'; });
             }
 
+            // ✅ ՈՒՂՂՈՒՄ. m.table_id-ն բազայի ներքին ID է, ոչ թե սեղանի տեսանելի համարը։
+            // Գտնում ենք համապատասխան table-ը State.allTables-ից և ցույց ենք տալիս
+            // նրա իրական table_number-ը (օր.՝ "1", "A", "VIP" և այլն)։
+            const seatedTable   = isSeated ? State.allTables.find(t => t.id === m.table_id) : null;
+            const seatedTableNo = seatedTable ? seatedTable.table_number : m.table_id;
+
             row.innerHTML = `
                 <span class="flex-1 ${isSeated ? 'text-[#7a9e7e]' : 'text-[#5c4f3d]'}">${m.first_name || 'Անանուն'}</span>
                 ${isSeated
-                    ? `<span class="text-[9px] bg-[#7a9e7e]/10 text-[#7a9e7e] px-1.5 py-0.5 rounded-full">Սեղ.${m.table_id}</span>
+                    ? `<span class="text-[9px] bg-[#7a9e7e]/10 text-[#7a9e7e] px-1.5 py-0.5 rounded-full">Սեղ.${seatedTableNo}</span>
                        <button onclick="unseatMemberAction(${m.id})" class="text-[#8c7b66] hover:text-[#c4736a] text-[10px] transition-colors">✕</button>`
                     : '<span class="text-[9px] text-[#c8bfb2]">⋮⋮ drag</span>'
                 }`;
