@@ -45,6 +45,29 @@ function openRenameModal(memberId, oldName) {
     };
 }
 
+// ── Rename table ──────────────────────────────────────────────────────────────
+
+function openRenameTableModal(tableId, oldNumber) {
+    const input = document.getElementById('renameTableInput');
+    input.value = oldNumber;
+    openModal('renameTableModal');
+    setTimeout(() => input.focus(), 100);
+
+    document.getElementById('updateTableConfirmBtn').onclick = async () => {
+        const newNumber = input.value.trim();
+        if (!newNumber) return;
+        const res = await API.renameTable(tableId, newNumber);
+        if (res.ok) {
+            const updatedTable = await res.json();
+            closeModal('renameTableModal');
+            patchState({ tableUpdated: updatedTable });
+        } else {
+            const err = await res.json().catch(() => ({}));
+            alert(err.detail || 'Սխալ կատարվեց');
+        }
+    };
+}
+
 // ── Table Sheet ───────────────────────────────────────────────────────────────
 
 /**
@@ -333,10 +356,11 @@ document.addEventListener('keydown', (e) => {
         if (document.activeElement.id === 'newTableNumber') { confirmAddTable(); return; }
         if (document.getElementById('editCapacityModal')?.classList.contains('open')) { confirmEditCapacity(); return; }
         if (document.getElementById('renameMemberModal')?.classList.contains('open')) { document.getElementById('updateConfirmBtn').click(); return; }
+        if (document.getElementById('renameTableModal')?.classList.contains('open')) { document.getElementById('updateTableConfirmBtn').click(); return; }
     }
     if (e.key === 'Escape') {
         ['addTableModal', 'seatCountModal', 'tablePickerModal', 'guestPickerModal',
          'tableSheetModal', 'editCapacityModal', 'confirmDeleteModal',
-         'renameMemberModal', 'chairActionsModal', 'mergeGuestsModal'].forEach(closeModal);
+         'renameMemberModal', 'renameTableModal', 'chairActionsModal', 'mergeGuestsModal'].forEach(closeModal);
     }
 });

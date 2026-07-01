@@ -31,7 +31,17 @@ function renderUnseatedPanel() {
     const fragment    = document.createDocumentFragment();
     let hasVisible    = false;
 
-    State.allGuests.forEach(guest => {
+    // Ամբողջովին չնստեցված հյուրերն ամենավերևում, հետո՝ մասամբ, հետո՝ լրիվ նստեցվածները
+    const sortedGuests = [...State.allGuests].sort((a, b) => {
+        const aUnseated = a.members.filter(m => unseatedIds.has(m.id)).length;
+        const bUnseated = b.members.filter(m => unseatedIds.has(m.id)).length;
+        const aFull = a.members.length > 0 && aUnseated === a.members.length;
+        const bFull = b.members.length > 0 && bUnseated === b.members.length;
+        if (aFull !== bFull) return aFull ? -1 : 1;
+        return bUnseated - aUnseated;
+    });
+
+    sortedGuests.forEach(guest => {
         if (State.currentUnseatedFilter !== 'all' && guest.side !== State.currentUnseatedFilter) return;
         hasVisible = true;
 

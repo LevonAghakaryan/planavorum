@@ -45,6 +45,14 @@ class TableRepository:
             self.db.refresh(db_table)
         return db_table
 
+    def update_table_number(self, table_id: int, table_number: str) -> Optional[Table]:
+        db_table = self.get_by_id(table_id)
+        if db_table:
+            db_table.table_number = table_number
+            self.db.commit()
+            self.db.refresh(db_table)
+        return db_table
+
     def update_position(self, table_id: int, x_pos: float, y_pos: float) -> Optional[Table]:
         db_table = self.get_by_id(table_id)
         if db_table:

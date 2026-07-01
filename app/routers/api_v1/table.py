@@ -56,6 +56,15 @@ def update_table_capacity(
 ):
     return service.update_capacity(table_id, capacity)
 
+@router.put("/{table_id}/name", response_model=TableResponse)
+def update_table_name(
+    table_id: int,
+    table_number: str,
+    wedding_id: int,
+    service: TableService = Depends(get_table_service),
+    _: int = Depends(verify_wedding_token),
+):
+    return service.rename_table(table_id, table_number)
 
 @router.put("/{table_id}/position", response_model=TableResponse)
 def update_table_position(

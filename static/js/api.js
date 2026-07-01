@@ -75,6 +75,9 @@ const API = {
     updateTableCapacity: (tableId, capacity) =>
         apiFetch(`/api/v1/tables/${tableId}/capacity?wedding_id=${weddingId}&capacity=${capacity}`, { method: 'PUT' }),
 
+/** @returns {Response} */
+    renameTable: (tableId, table_number) =>
+        apiFetch(`/api/v1/tables/${tableId}/name?wedding_id=${weddingId}&table_number=${encodeURIComponent(table_number)}`, { method: 'PUT' }),
     /** @returns {Response} */
     updateTablePosition: (tableId, x_pos, y_pos) =>
         apiFetch(`/api/v1/tables/${tableId}/position?wedding_id=${weddingId}`, {

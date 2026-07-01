@@ -201,7 +201,16 @@ function patchState(changes) {
     }
 
     if (guestsChanged) _recomputeUnseated();
-    if (guestsChanged) { renderGuestsPanel(); renderUnseatedPanel(); }
+    if (guestsChanged) {
+        renderGuestsPanel();
+        renderUnseatedPanel();
+    } else if (tablesChanged) {
+        // Unseated panel ցույց է տալիս «Սեղան{number}» badge-ը seated
+        // անդամների համար՝ State.allTables-ից. սեղանի rename/capacity
+        // փոփոխությունից հետո էլ պետք է վերարտադրվի, նույնիսկ եթե
+        // հյուրերի տվյալները չեն փոխվել։
+        renderUnseatedPanel();
+    }
     if (tablesChanged) { renderHall(); }
 }
 // ── Full reload (initial load only) ──────────────────────────────────────────

@@ -327,6 +327,22 @@ header, .bottom-nav {
 </div>
 
 
+<!-- Rename table -->
+<div class="modal-overlay" id="renameTableModal" onclick="closeModal('renameTableModal')">
+    <div class="bg-[#fdfaf6] rounded-2xl w-80 shadow-2xl border border-[#e8ddd0] overflow-hidden" onclick="event.stopPropagation()">
+        <div class="px-5 py-4 border-b border-[#e8ddd0] flex justify-between items-center">
+            <span class="font-cormorant text-lg font-semibold">Փոխել սեղանի համարը</span>
+            <button onclick="closeModal('renameTableModal')" class="text-[#8c7b66] hover:text-[#1a1612] text-lg">✕</button>
+        </div>
+        <div class="p-5 space-y-4">
+            <input id="renameTableInput" type="text" placeholder="Օր.՝ 1, A, VIP..."
+                class="w-full px-3 py-2 rounded-lg border border-[#e8ddd0] bg-white text-sm focus:border-[#c9a96e] transition-colors">
+            <button id="updateTableConfirmBtn" class="w-full py-2.5 bg-[#1a1612] text-[#e8d5b0] rounded-xl text-sm font-semibold hover:bg-[#3d3228] transition-colors">Թարմացնել ✓</button>
+        </div>
+    </div>
+</div>
+
+
 
 <!-- Merge guests -->
 <div class="modal-overlay" id="mergeGuestsModal" onclick="closeModal('mergeGuestsModal')">

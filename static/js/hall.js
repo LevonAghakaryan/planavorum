@@ -250,7 +250,9 @@ function buildTableElement(table, allMembers) {
     ].join(';');
     body.innerHTML = `
         <div style="text-align:center;pointer-events:none;z-index:2;">
-            <div style="font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:700;color:#1a1612;line-height:1.1;">Սեղան ${table.table_number}</div>
+            <div class="table-name-label" onclick="event.stopPropagation();openRenameTableModal(${table.id},'${String(table.table_number).replace(/'/g, "\\'")}')"
+                style="font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:700;color:#1a1612;line-height:1.1;cursor:pointer;pointer-events:auto;"
+                title="Սեղմեք փոխելու համար">Սեղան ${table.table_number}</div>
             <div style="font-size:10px;color:#8c7b66;margin-top:2px;">${table.capacity} տեղ ${sideBadge}</div>
         </div>`;
 
@@ -347,7 +349,7 @@ function buildTableElement(table, allMembers) {
 
     // ── Table drag (move on canvas) ──
     tDiv.addEventListener('mousedown', (e) => {
-        if (e.target.tagName === 'BUTTON' || e.target.classList.contains('chair')) return;
+        if (e.target.tagName === 'BUTTON' || e.target.classList.contains('chair') || e.target.classList.contains('table-name-label')) return;
         e.preventDefault();
         State.activeMovingTable = tDiv;
         tDiv.classList.add('dragging');

@@ -307,6 +307,17 @@ body { background-color: #EEF2E4 !important; }
     </div>
 </div>
 
+<div class="modal-overlay" id="renameTableModal" onclick="closeModal('renameTableModal')">
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+        <div class="modal-handle"></div>
+        <div class="px-5 pt-4 pb-3 border-b border-[#e8ddd0]"><div class="font-cormorant text-xl font-bold">Սեղանի համար</div></div>
+        <div class="p-5 space-y-4">
+            <input id="renameTableInput" type="text" placeholder="Օր.՝ 1, A, VIP..." class="w-full px-4 py-3 rounded-xl border border-[#e8ddd0] bg-white text-sm" style="font-size:16px;">
+            <button id="renameTableConfirmBtn" class="w-full py-3.5 bg-[#445E3F] text-[#e8d5b0] rounded-xl text-sm font-semibold">Պահպանել ✓</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="mergeNameModal" onclick="closeModal('mergeNameModal')">
     <div class="modal-sheet" onclick="event.stopPropagation()">
         <div class="modal-handle"></div>
@@ -456,6 +467,12 @@ WA.api = {
 
     updateCapacity: async (id, cap) => {
         const r = await WA.fetch(`/api/v1/tables/${id}/capacity?wedding_id=${weddingId}&capacity=${cap}`, { method: 'PUT' });
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || 'Սխ.'); }
+        return r.json();  // full updated table
+    },
+
+    renameTable: async (id, num) => {
+        const r = await WA.fetch(`/api/v1/tables/${id}/name?wedding_id=${weddingId}&table_number=${encodeURIComponent(num)}`, { method: 'PUT' });
         if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || 'Սխ.'); }
         return r.json();  // full updated table
     },
@@ -838,7 +855,8 @@ function renderTables(tables, allMembers) {
                 <span style="font-size:9px;color:#445E3F;font-weight:700;">${table.table_number}</span>
             </div>
             <div class="flex-1 min-w-0">
-                <div class="text-sm font-semibold text-[#445E3F]">Սեղան ${table.table_number} ${sideBadge}
+                <div class="text-sm font-semibold text-[#445E3F]">
+                    <span onclick="event.stopPropagation();openRenameTable(${table.id},'${String(table.table_number).replace(/'/g, "\\'")}')">Սեղան ${table.table_number} ✏️</span> ${sideBadge}
                     <span class="text-[11px] font-normal text-[#787878] ml-1">${WA.catLabel[table.category] || ''}</span>
                 </div>
                 <div class="progress-bar mt-1.5"><div class="progress-fill" style="width:${pct}%"></div></div>
@@ -927,7 +945,8 @@ function renderTableDetailFromState(tableId) {
     const free = table.capacity - seated.length;
     const sideBadge = { 'bride': '👰', 'groom': '🤵', 'mutual': '🤝' }[table.side || 'mutual'];
 
-    document.getElementById('tableDetailTitle').innerText = `Սեղան ${table.table_number} ${sideBadge}`;
+    document.getElementById('tableDetailTitle').innerHTML =
+        `<span onclick="openRenameTable(${table.id},'${String(table.table_number).replace(/'/g, "\\'")}')" style="cursor:pointer;">Սեղան ${table.table_number} ✏️</span> ${sideBadge}`;
     document.getElementById('tableDetailMeta').innerText = `${seated.length}/${table.capacity}`;
     const body = document.getElementById('tableDetailBody');
     body.innerHTML = '';
@@ -1087,6 +1106,17 @@ function renderUnseated() {
     document.getElementById('unseatedSummary').innerText = `${totalM - WA.state.unseatedMembers.length}/${totalM} նստեցված · ${WA.state.unseatedMembers.length} չնստեցված`;
     const unseatedIds = new Set(WA.state.unseatedMembers.map(m => m.id));
     const filtered = WA.state.allGuests.filter(g => unseatedFilter === 'all' || g.side === unseatedFilter);
+
+    // Ամբողջովին չնստեցված հյուրերն ամենավերևում
+    filtered.sort((a, b) => {
+        const aUnseated = a.members.filter(m => unseatedIds.has(m.id)).length;
+        const bUnseated = b.members.filter(m => unseatedIds.has(m.id)).length;
+        const aFull = a.members.length > 0 && aUnseated === a.members.length;
+        const bFull = b.members.length > 0 && bUnseated === b.members.length;
+        if (aFull !== bFull) return aFull ? -1 : 1;
+        return bUnseated - aUnseated;
+    });
+
     container.innerHTML = '';
     const frag = document.createDocumentFragment();
     let any = false;
@@ -1225,6 +1255,26 @@ function openRename(memberId, oldName) {
         }
     };
 }
+
+function openRenameTable(tableId, oldNumber) {
+    document.getElementById('renameTableInput').value = oldNumber;
+    openModal('renameTableModal');
+    setTimeout(() => document.getElementById('renameTableInput').focus(), 250);
+
+    document.getElementById('renameTableConfirmBtn').onclick = async () => {
+        const newNumber = document.getElementById('renameTableInput').value.trim();
+        if (!newNumber) return;
+        try {
+            const updatedTable = await WA.api.renameTable(tableId, newNumber);
+            closeModal('renameTableModal');
+            // ✅ No GET — patch state directly
+            patchState({ tableUpdated: updatedTable });
+        } catch (e) {
+            alert(e.message);
+        }
+    };
+}
+
 function confirmUnseat(memberId, name) {
     document.getElementById('deleteConfirmText').innerText = `«${name}» - ին հեռացնել սեղանից?`;
     openModal('confirmDeleteModal');

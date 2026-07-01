@@ -37,6 +37,14 @@ class TableService:
             raise HTTPException(status_code=404, detail="Table not found")
         return table
 
+    def rename_table(self, table_id: int, table_number: str):
+        if not table_number or not table_number.strip():
+            raise HTTPException(status_code=400, detail="Անունը/համարը չի կարող դատարկ լինել")
+        table = self.table_repo.update_table_number(table_id, table_number.strip())
+        if not table:
+            raise HTTPException(status_code=404, detail="Table not found")
+        return table
+
     def update_position(self, table_id: int, x_pos: float, y_pos: float):
         table = self.table_repo.update_position(table_id, x_pos, y_pos)
         if not table:
