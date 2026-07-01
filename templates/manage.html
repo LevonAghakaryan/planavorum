@@ -119,6 +119,12 @@ header, .bottom-nav {
             <button onclick="filterMainGuests('bride')" id="btnMainFilter-bride" class="flex-1 py-1.5 text-[11px] font-semibold rounded-lg text-[#5c4f3d] hover:bg-[#f7f3ee] transition-all">👰 Հարս</button>
             <button onclick="filterMainGuests('groom')" id="btnMainFilter-groom" class="flex-1 py-1.5 text-[11px] font-semibold rounded-lg text-[#5c4f3d] hover:bg-[#f7f3ee] transition-all">🤵 Փեսա</button>
         </div>
+
+        <div class="px-3 py-2 border-b border-[#e8ddd0] bg-[#c9a96e]/[0.04] flex-shrink-0">
+            <input type="text" id="guestSearchInput" oninput="searchGuests(this.value)"
+                placeholder="🔍 Փնտրել հյուր..."
+                class="w-full px-3 py-1.5 rounded-lg border border-[#e8ddd0] bg-white text-xs text-[#1a1612] placeholder-[#8c7b66] hover:border-[#c9a96e] focus:border-[#c9a96e] transition-colors">
+        </div>
         <!-- Merge bar -->
         <div id="mergeBar" class="hidden px-3 py-2 bg-[#c4736a]/10 border-b border-[#c4736a]/20 flex-shrink-0">
             <button onclick="mergeSelectedGuests()" class="w-full py-1.5 bg-[#445E3F] text-white rounded-lg text-xs font-semibold hover:bg-[#445E3F] transition-colors">
@@ -176,6 +182,9 @@ header, .bottom-nav {
         <div class="px-4 pt-4 pb-3 border-b border-[#e8ddd0]">
             <div class="font-cormorant text-base font-semibold text-[#1a1612]">Չնստեցվածներ</div>
             <div id="unseatedSummary" class="text-[10px] text-[#8c7b66] mt-0.5">Բեռնվում է...</div>
+                        <input type="text" id="unseatedSearchInput" oninput="searchUnseated(this.value)"
+                placeholder="🔍 Փնտրել հյուր..."
+                class="w-full px-3 py-1.5 mt-2 rounded-lg border border-[#e8ddd0] bg-white text-xs text-[#1a1612] placeholder-[#8c7b66] hover:border-[#c9a96e] focus:border-[#c9a96e] transition-colors">
             <div class="flex gap-1.5 my-3 bg-[#c9a96e]/[0.04] p-1 rounded-xl border border-[#e8ddd0]">
                 <button onclick="filterUnseatedMembers('all')"   id="btnUnseatedFilter-all"   class="flex-1 py-1.5 text-[11px] font-semibold rounded-lg transition-all bg-[#1a1612] text-[#e8d5b0] shadow-sm">Բոլորը</button>
                 <button onclick="filterUnseatedMembers('bride')" id="btnUnseatedFilter-bride" class="flex-1 py-1.5 text-[11px] font-semibold rounded-lg text-[#5c4f3d] hover:bg-[#f7f3ee] transition-all">👰 Հարս</button>

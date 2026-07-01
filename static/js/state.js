@@ -25,6 +25,17 @@
 
 // ── Shared mutable state ──────────────────────────────────────────────────────
 const State = {
+
+// ── Guest panel ───────────────────────────────────────────────────────
+    selectedGuestIds:  [],
+    currentMainFilter: 'all',
+    guestSearchQuery:  '',   // ✅ նոր
+
+    // ── Unseated panel ────────────────────────────────────────────────────
+    currentUnseatedFilter: 'all',
+    openedGroupIds: new Set(),
+    unseatedSearchQuery: '', // ✅ նոր
+// ── Shared mutable state ──────────────────────────────────────────────────────
     // ── Data cache ────────────────────────────────────────────────────────
     allGuests:        [],
     allTables:        [],

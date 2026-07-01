@@ -41,8 +41,14 @@ function renderUnseatedPanel() {
         return bUnseated - aUnseated;
     });
 
+    const query = State.unseatedSearchQuery;
     sortedGuests.forEach(guest => {
         if (State.currentUnseatedFilter !== 'all' && guest.side !== State.currentUnseatedFilter) return;
+        if (query) {
+            const inGuestName  = guest.display_name.toLowerCase().includes(query);
+            const inMemberName = guest.members.some(m => (m.first_name || '').toLowerCase().includes(query));
+            if (!inGuestName && !inMemberName) return;
+        }
         hasVisible = true;
 
         const guestUnseated = guest.members.filter(m => unseatedIds.has(m.id));
@@ -146,7 +152,10 @@ function filterUnseatedMembers(side) {
     });
     renderUnseatedPanel();
 }
-
+function searchUnseated(value) {
+    State.unseatedSearchQuery = value.trim().toLowerCase();
+    renderUnseatedPanel();
+}
 // ── Mutations (write → patchState) ───────────────────────────────────────────
 
 async function unseatMemberAction(memberId) {

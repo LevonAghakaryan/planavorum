@@ -20,7 +20,7 @@ class GuestService:
         members_to_create = []
         for i in range(db_guest.total_count):
             # Առաջին տողին տալիս ենք հիմնական անունը, մնացածին թողնում ենք դատարկ (NULL)
-            name = db_guest.display_name if i == 0 else None
+            name = db_guest.display_name if i == 0 else f"{db_guest.display_name} {i}"
             member = GuestMember(guest_id=db_guest.id, first_name=name, table_id=None)
             members_to_create.append(member)
 

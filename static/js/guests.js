@@ -69,9 +69,15 @@ function renderGuestsPanel() {
         return;
     }
 
-    const visibleGuests = State.allGuests.filter(
-        g => State.currentMainFilter === 'all' || g.side === State.currentMainFilter,
-    );
+    const query = State.guestSearchQuery;
+    const visibleGuests = State.allGuests.filter(g => {
+        const sideMatch = State.currentMainFilter === 'all' || g.side === State.currentMainFilter;
+        if (!sideMatch) return false;
+        if (!query) return true;
+        const inGuestName  = g.display_name.toLowerCase().includes(query);
+        const inMemberName = g.members?.some(m => (m.first_name || '').toLowerCase().includes(query));
+        return inGuestName || inMemberName;
+    });
 
     if (!visibleGuests.length) {
         container.innerHTML = '<p class="text-center text-[#8c7b66] text-xs italic py-6">Կողմից հյ. չկան 🍃</p>';
@@ -130,6 +136,11 @@ function filterMainGuests(side) {
             ? 'flex-1 py-1.5 text-[11px] font-semibold rounded-lg transition-all bg-[#1a1612] text-[#e8d5b0] shadow-sm'
             : 'flex-1 py-1.5 text-[11px] font-semibold rounded-lg text-[#5c4f3d] hover:bg-[#f7f3ee] transition-all';
     });
+    renderGuestsPanel();
+}
+
+function searchGuests(value) {
+    State.guestSearchQuery = value.trim().toLowerCase();
     renderGuestsPanel();
 }
 
